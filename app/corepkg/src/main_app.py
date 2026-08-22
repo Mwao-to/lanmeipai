@@ -277,7 +277,7 @@ def der_read_tlv(data, pos = 0):
 
 
 def parse_spki_public_key(pem):
-    """解析 X.509 SubjectPublicKeyInfo PEM,返回 (n, e)。"""
+    """读取 X.509 SubjectPublicKeyInfo PEM,返回 (n, e)。"""
     b64 = ''.join(pem.strip().split('\n')[1:-1])
     der = base64.b64decode(b64)
     _, spki, _ = der_read_tlv(der)                      # SEQUENCE
@@ -314,7 +314,7 @@ NETEASE_PUBLIC_KEY = (
     '-----END PUBLIC KEY-----'
 )
 
-# 缓存解析结果
+# 缓存处理结果
 _NETEASE_RSA_KEY = None
 
 
@@ -683,7 +683,7 @@ def http_fetch(
     use_cache = False,
 ) :
     """统一 HTTP 请求。
-    返回 {'status_code', 'body'(解析后的 JSON 或原始 bytes), 'headers', 'url'}
+    返回 {'status_code', 'body'(转换后的 JSON 或原始 bytes), 'headers', 'url'}
     form: application/x-www-form-urlencoded (与原版 httpFetch 的 form 一致)
     data: 原始 body bytes/str
     """
@@ -741,7 +741,7 @@ def _parse_response(body_bytes, headers, url, status_code = 200) :
         'url': url,
         'body': body_bytes,
     }
-    # 尝试解析 JSON
+    # 尝试读取 JSON
     try:
         result['body'] = body_bytes.decode('utf-8')
         import json as _json
@@ -762,7 +762,7 @@ def _sleep(sec):
 # ════════ wyapi/toubiec.py ════════
 # -*- coding: utf-8 -*-
 """
-toubiec.py — 第三方网易云解析服务封装
+toubiec.py — 第三方网易云取链服务封装
 后端: https://nextmusic.toubiec.cn (前端 https://wyapi.toubiec.cn/)
 用于官方接口取不到播放链接的 VIP / 无版权歌曲。
 
@@ -833,7 +833,7 @@ def _post(path, payload) :
 
 
 def get_song_url(song_id, quality = '320k', max_retry = 2) :
-    """第三方解析播放直链。失败抛 RuntimeError。
+    """第三方获取播放直链。失败抛 RuntimeError。
 
     策略:
       - 429 限流:按响应 retryAfter 等待后重试
@@ -862,13 +862,13 @@ def get_song_url(song_id, quality = '320k', max_retry = 2) :
                 time.sleep(1)
                 continue
             if data.get('code') != 200:
-                raise RuntimeError(data.get('message') or f'解析失败(code={data.get("code")})')
+                raise RuntimeError(data.get('message') or f'获取失败(code={data.get("code")})')
             url = ((data.get('data') or {}).get('url') or '').replace('`', '').strip()
             if not url:
-                last_err = RuntimeError('第三方解析未返回链接(该歌曲可能不可用)')
+                last_err = RuntimeError('第三方未返回链接(该歌曲可能不可用)')
                 continue
             return url
-    raise RuntimeError(f'第三方解析失败: {last_err}')
+    raise RuntimeError(f'第三方获取失败: {last_err}')
 
 
 def _yrc_json_to_lrc(raw) :
@@ -884,7 +884,7 @@ def _yrc_json_to_lrc(raw) :
         if not isinstance(obj, (list, dict)):
             return ''
     except Exception:
-        # 逐行 NDJSON:任一行解析失败即视为无效
+        # 逐行 NDJSON:任一行格式异常即视为无效
         arr = []
         for line in raw.splitlines():
             line = line.strip()
@@ -912,7 +912,7 @@ def _yrc_json_to_lrc(raw) :
 
 
 def _clean_lrc(raw) :
-    """清洗歌词字段:逐字JSON转标准LRC;无法解析的JSON视为无效返回空串。"""
+    """清洗歌词字段:逐字JSON转标准LRC;无法识别的JSON视为无效返回空串。"""
     raw = (raw or '').strip()
     if raw.startswith('{'):
         converted = _yrc_json_to_lrc(raw)
@@ -921,7 +921,7 @@ def _clean_lrc(raw) :
 
 
 def get_lyric(song_id, max_retry = 2) :
-    """第三方解析歌词。返回 {lrc, tlyric, yrc}(可能为空串)。失败抛 RuntimeError。"""
+    """第三方获取歌词。返回 {lrc, tlyric, yrc}(可能为空串)。失败抛 RuntimeError。"""
     last_err = None
     for attempt in range(max_retry + 1):
         try:
@@ -935,17 +935,17 @@ def get_lyric(song_id, max_retry = 2) :
             time.sleep(3)
             continue
         if data.get('code') != 200:
-            raise RuntimeError(data.get('message') or f'歌词解析失败(code={data.get("code")})')
+            raise RuntimeError(data.get('message') or f'歌词获取失败(code={data.get("code")})')
         d = data.get('data') or {}
         return {
             'lyric': _clean_lrc(d.get('lrc')),
             'tlyric': _clean_lrc(d.get('tlyric')),
             'yrc': d.get('yrc') or '',
         }
-    raise RuntimeError(f'第三方歌词解析失败: {last_err}')
+    raise RuntimeError(f'第三方歌词获取失败: {last_err}')
 
 # toubiec 模块命名空间兼容层(单文件版):server 段沿用原版 `toubiec.get_song_url()` /
-# `toubiec.get_lyric()` 的模块式调用,缺失此对象会导致 VIP/无版权歌曲兜底解析
+# `toubiec.get_lyric()` 的模块式调用,缺失此对象会导致 VIP/无版权歌曲兜底取链
 # 静默失效(NameError 被 except Exception 吞掉)。
 import types as _types
 
@@ -1177,7 +1177,7 @@ class WYSource(MusicSource):
             if m:
                 raw_id = m.group(1)
             else:
-                # 通过重定向解析
+                # 通过重定向提取
                 resp = http_fetch(raw_id, retry=2)
                 url = resp.get('url', raw_id)
                 m = self._LIST_LINK_RXP.match(url) or self._LIST_LINK_RXP2.match(url)
@@ -1413,7 +1413,7 @@ class WYSource(MusicSource):
         return f'https://music.163.com/#/song?id={song.get("songmid")}'
 
 
-# ---------------------------------------------------------------- 歌词解析(移植 parseTools)
+# ---------------------------------------------------------------- 歌词处理(移植 parseTools)
 
 def _ms_format(time_ms) :
     if time_ms is None:
@@ -1523,7 +1523,7 @@ def _fix_time_tag(lrc, target_lrc) :
 
 
 def parse_netease_lyric(body) :
-    """解析网易云歌词响应(含 yrc 逐字歌词 → lxlyric)"""
+    """处理网易云歌词响应(含 yrc 逐字歌词 → lxlyric)"""
     info = {'lyric': '', 'tlyric': '', 'rlyric': '', 'lxlyric': ''}
     ylrc = (body.get('yrc') or {}).get('lyric')
     ytlrc = (body.get('ytlrc') or {}).get('lyric')
@@ -1597,7 +1597,7 @@ import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
 from urllib.parse import quote as _url_quote
 
-# 是否启用第三方解析兑底(官方取不到链接时,如 VIP/无版权歌曲)
+# 是否启用第三方取链兑底(官方取不到链接时,如 VIP/无版权歌曲)
 TOUBIEC_ENABLED = os.environ.get('TOUBIEC_ENABLED', '1') != '0'
 
 app = Flask(__name__)   # 单文件版:无静态目录
@@ -1701,7 +1701,7 @@ def _resolve_music_url(song, songmid, quality):
     except Exception as e1:
         if not TOUBIEC_ENABLED:
             return None, '', str(e1)
-        # 第三方解析(带缓存,避免触发限流)
+        # 第三方取链(带缓存,避免触发限流)
         cache_key = f'{songmid}|{quality}'
         hit = _url_cache.get(cache_key)
         if hit and hit[2] + _URL_CACHE_TTL > _time.time():
@@ -1872,7 +1872,7 @@ def api_download_lyric():
 
 
 def _resolve_mvid(song, songmid):
-    """从官方歌曲对象解析 MV id(搜索数据 meta.mv 字段)。0/缺失 → None。"""
+    """从官方歌曲对象提取 MV id(搜索数据 meta.mv 字段)。0/缺失 → None。"""
     mv = (song.get('meta') or {}).get('mv')
     try:
         mvid = int(mv)
@@ -1896,14 +1896,14 @@ def api_mv_check():
 
 @app.get('/api/mv/url')
 def api_mv_url():
-    """官方接口解析 MV 视频直链(自动降级 1080→720→480)。"""
+    """官方接口获取 MV 视频直链(自动降级 1080→720→480)。"""
     mvid = (request.args.get('mvid') or '').strip()
     if not mvid:
         return jsonify({'code': 400, 'message': '缺少 mvid 参数'}), 400
     try:
         url = wy.get_mv_url(mvid)
     except Exception as e:
-        return jsonify({'code': 502, 'message': f'MV 解析失败: {e}'}), 502
+        return jsonify({'code': 502, 'message': f'MV 加载失败: {e}'}), 502
     return jsonify({'code': 200, 'data': {'url': url}})
 
 
@@ -1918,7 +1918,7 @@ def api_download_mv():
     try:
         url = wy.get_mv_url(mvid)
     except Exception as e:
-        return jsonify({'code': 502, 'message': f'MV 解析失败: {e}'}), 502
+        return jsonify({'code': 502, 'message': f'MV 加载失败: {e}'}), 502
     try:
         upstream = requests.get(url, stream=True, timeout=(10, 60),
                                 headers={'User-Agent': 'Mozilla/5.0'})
@@ -1979,7 +1979,7 @@ def api_songlist():
 
 @app.get('/api/songdetail')
 def api_song_detail():
-    """按单曲 ID 官方解析歌曲详情(搜索框单曲链接直连),结构与搜索结果一致"""
+    """按单曲 ID 官方获取歌曲详情(搜索框单曲链接直连),结构与搜索结果一致"""
     songmid = (request.args.get('songmid') or '').strip()
     if not songmid.isdigit():
         return jsonify({'code': 400, 'message': '缺少 songmid 参数'})
@@ -2047,7 +2047,7 @@ def handle_api(path):
     _ensure_init()
     r = app.test_client(use_cookies=False).open(path, method='GET')
     body = r.get_data(as_text=True)
-    # 404 兜底:未匹配路由返回的是 HTML 错误页,包装成 JSON 供前端统一解析
+    # 404 兜底:未匹配路由返回的是 HTML 错误页,包装成 JSON 供前端统一处理
     if r.status_code == 404 and not body.lstrip().startswith('{'):
         body = json.dumps({'code': 404, 'message': '接口不存在'})
     return json.dumps({'status': r.status_code, 'body': body})
@@ -2452,7 +2452,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     <button class="modal-x" onclick="closeMvModal()" title="关闭">○</button>
     <div class="modal-title" id="mvTitle">▶ MV播放器</div>
     <video id="mvVideo" controls playsinline style="display:none"></video>
-    <div class="loading" id="mvLoading">MV 解析中</div>
+    <div class="loading" id="mvLoading">MV 加载中</div>
     <button class="modal-btn" onclick="downloadMv()">下载 MV</button>
   </div>
 </div>
@@ -2517,7 +2517,7 @@ function api(path) {
 window.__onApiResult = (id, status, body) => {
   const p = _pending[id]; if (!p) return;           // 过期/超时结果丢弃
   delete _pending[id]; clearTimeout(p.timer);
-  try { p.resolve(JSON.parse(body)); } catch (e) { p.reject(new Error('响应解析失败')); }
+  try { p.resolve(JSON.parse(body)); } catch (e) { p.reject(new Error('响应处理失败')); }
 };
 
 /* ============ 迷你下载任务面板(可收缩)+ 下载器事件 ============
@@ -2832,11 +2832,11 @@ async function autoFill(minCount) {
   }
 }
 
-/* ══════════ 链接直搜：识别歌单/单曲/歧义残链，官方接口解析后整包装入列表 ══════════
+/* ══════════ 链接直搜：识别歌单/单曲/歧义残链，官方接口取数后整包装入列表 ══════════
  * 支持：① 歌单 PC/手机端 playlist?id=N、/playlist/N 路径
  *       ② 单曲 song?id=N(PC/手机端)、/song/N 路径
- *       ③ 纯数字 ≥6 位：默认按歌单解析(失败自动回退普通搜索)
- *       ④ 残缺链接兜底：含 id=数字 但无法区分歌单/单曲 → 双解析,标题栏 ♫ 切换 */
+ *       ③ 纯数字 ≥6 位：默认按歌单处理(失败自动回退普通搜索)
+ *       ④ 残缺链接兜底：含 id=数字 但无法区分歌单/单曲 → 双路获取,标题栏 ♫ 切换 */
 function parseMusicLink(kw) {
   const t = kw.trim();
   let m;
@@ -2852,14 +2852,14 @@ function parseMusicLink(kw) {
 
 async function loadPlaylist(pid, fromUrl, seq) {
   $('resultEmpty').style.display = 'none';
-  $('resultBody').innerHTML = '<div class="loading">歌单解析中</div>';
+  $('resultBody').innerHTML = '<div class="loading">歌单加载中</div>';
   state.kw = '';   // 一次性载入:清空关键词即可禁用下滑分页/自动补齐(loadMore/autoFill 均有 !state.kw 保护)
   try {
     const r = await api(`/api/songlist?id=${encodeURIComponent(pid)}&limit=500`);
     if (seq !== searchSeq) return null;
     if (r.code !== 200 || !(r.data && r.data.list && r.data.list.length)) {
       if (!fromUrl) { await runSearch(pid, 1, false, true); return null; }   // 纯数字不是有效歌单:回退普通搜索
-      const msg = r.message || '歌单解析失败';
+      const msg = r.message || '歌单加载失败';
       $('resultBody').innerHTML = `<div class="err">${esc(msg)}</div>`;
       toast(msg, 'error');
       return null;
@@ -2878,7 +2878,7 @@ async function loadPlaylist(pid, fromUrl, seq) {
   }
 }
 
-/* 整包套用一组歌曲数据到结果列表(歌单/单曲/双解析切换共用) */
+/* 整包套用一组歌曲数据到结果列表(歌单/单曲/双路切换共用) */
 function applyListData(list, metaText) {
   state.list = list;
   state.total = list.length;
@@ -2889,11 +2889,11 @@ function applyListData(list, metaText) {
   autoFill(PC_INIT_TARGET);
 }
 
-/* 单曲链接官方解析:songmid → 歌曲详情整包。collectOnly=true 时只取数不渲染(双解析用) */
+/* 单曲链接官方取数:songmid → 歌曲详情整包。collectOnly=true 时只取数不渲染(双路获取用) */
 async function loadSingleSong(sid, seq, collectOnly) {
   $('resultEmpty').style.display = 'none';
   if (!collectOnly) {
-    $('resultBody').innerHTML = '<div class="loading">歌曲解析中</div>';
+    $('resultBody').innerHTML = '<div class="loading">歌曲加载中</div>';
     state.kw = '';
   }
   try {
@@ -2901,7 +2901,7 @@ async function loadSingleSong(sid, seq, collectOnly) {
     if (seq !== searchSeq) return null;
     if (r.code !== 200 || !(r.data && r.data.list && r.data.list.length)) {
       if (!collectOnly) {
-        const msg = r.message || '歌曲解析失败';
+        const msg = r.message || '歌曲加载失败';
         $('resultBody').innerHTML = `<div class="err">${esc(msg)}</div>`;
         toast(msg, 'error');
       }
@@ -2909,7 +2909,7 @@ async function loadSingleSong(sid, seq, collectOnly) {
     }
     const list = r.data.list, s0 = list[0];
     if (collectOnly) return list;
-    applyListData(list, `♪ ${s0.name} · ${s0.singer} · 单曲解析`);
+    applyListData(list, `♪ ${s0.name} · ${s0.singer} · 单曲直连`);
     toast(`已加载单曲「${s0.name}」`, 'success', 2000);
     return list;
   } catch (e) {
@@ -2922,7 +2922,7 @@ async function loadSingleSong(sid, seq, collectOnly) {
   }
 }
 
-/* ═══ 歧义残链双解析:歌单优先展示,单曲后台就绪后点亮 ♫ 切换标签 ═══ */
+/* ═══ 歧义残链双路获取:歌单优先展示,单曲后台就绪后点亮 ♫ 切换标签 ═══ */
 let dualSets = null;   // { pl:[...], plMeta:'', song:[...], showing:'pl'|'song' }
 function setSwitchTab(active) {
   const b = $('srcToggle');
@@ -2933,7 +2933,7 @@ function setSwitchTab(active) {
 async function loadDualFallback(id, seq) {
   dualSets = null; setSwitchTab(false);
   $('resultEmpty').style.display = 'none';
-  $('resultBody').innerHTML = '<div class="loading">链接不完整，歌单+单曲同时解析中</div>';
+  $('resultBody').innerHTML = '<div class="loading">链接不完整，歌单+单曲同时获取中</div>';
   state.kw = '';
   const songP = loadSingleSong(id, seq, true);          // 并发:单曲只收集
   const plRes = await loadPlaylist(id, true, seq);      // 歌单优先展示
@@ -2942,9 +2942,9 @@ async function loadDualFallback(id, seq) {
   if (plRes && songList) {
     dualSets = { pl: plRes.list, plMeta: plRes.meta, song: songList, showing: 'pl' };
     setSwitchTab(false);   // 显示按钮(默认态配色)
-    toast('链接不完整:已同时解析出歌单与单曲，点标题栏右侧 ♫ 切换', 'info', 3500);
+    toast('链接不完整:已同时获取歌单与单曲，点标题栏右侧 ♫ 切换', 'info', 3500);
   } else if (!plRes && songList) {
-    applyListData(songList, `♪ ${songList[0].name} · ${songList[0].singer} · 单曲解析`);
+    applyListData(songList, `♪ ${songList[0].name} · ${songList[0].singer} · 单曲直连`);
     toast(`已加载单曲「${songList[0].name}」`, 'success', 2000);
   }
 }
@@ -2953,7 +2953,7 @@ $('srcToggle').addEventListener('click', () => {
   if (dualSets.showing === 'pl') {
     dualSets.showing = 'song';
     const s0 = dualSets.song[0];
-    applyListData(dualSets.song, `♪ ${s0.name} · ${s0.singer} · 单曲解析`);
+    applyListData(dualSets.song, `♪ ${s0.name} · ${s0.singer} · 单曲直连`);
     setSwitchTab(true);
     toast('已切换为单曲数据', 'success', 1500);
   } else {
@@ -2979,13 +2979,13 @@ async function silentSearch(kw) {
 async function runSearch(kw, p, toastOn, noPlaylist) {
   const seq = ++searchSeq;   // 新搜索开始：作废所有在途旧搜索/旧预取响应
   if (p === 1 && !noPlaylist) {
-    dualSets = null; setSwitchTab(false);          // 新搜索开始:重置双解析状态与切换标签
+    dualSets = null; setSwitchTab(false);          // 新搜索开始:重置双路状态与切换标签
     const ml = parseMusicLink(kw);
     if (ml) {
       state.page = 1;
       if (ml.type === 'song') { await loadSingleSong(ml.id, seq); return; }
       if (ml.type === 'playlist') { await loadPlaylist(ml.id, true, seq); return; }
-      await loadDualFallback(ml.id, seq); return;   // 残缺无法区分:歌单+单曲双解析
+      await loadDualFallback(ml.id, seq); return;   // 残缺无法区分:歌单+单曲双路获取
     }
   }
   // 只刷新搜索结果面板
@@ -3063,7 +3063,7 @@ async function fetchUrlWithRetry(song, seq, onRetry) {
         api(`/api/url?songmid=${encodeURIComponent(song.songmid)}&quality=${QUALITY}`), URL_TIMEOUT_MS);
       if (seq !== playSeq) return 'EXPIRED';
       if (r.code === 200 && r.data && r.data.url) return r;
-      throw new Error(r.message || '解析失败');       // 业务失败同样计入重试
+      throw new Error(r.message || '加载失败');       // 业务失败同样计入重试
     } catch (e) {
       if (seq !== playSeq) return 'EXPIRED';
       if (attempt >= URL_MAX_RETRY) return 'FAILED';
@@ -3139,7 +3139,7 @@ async function play(i, list) {
     }
     const viaTag = r.data.via === 'toubiec' ? '<span class="tag3rd">VIP</span>' : '';
     setPlayerLine($('nowName'), `${esc(song.name)}${viaTag}`);   // 歌名+VIP标签作为整体跑马灯
-    if (r.data.via === 'toubiec') toast(`已通过VIP通道解析播放「${song.name}」`, 'warn', 3000);
+    if (r.data.via === 'toubiec') toast(`已通过VIP通道播放「${song.name}」`, 'warn', 3000);
     audio.src = r.data.url;
     audio.play().catch(() => { });   // 自动播放被拦截时静默,用户手动点击播放即可
   } catch (e) {
@@ -3277,19 +3277,19 @@ async function openMvModal() {
   const v = $('mvVideo'), ld = $('mvLoading');
   $('mvTitle').textContent = `▶ ${state.song ? state.song.name : ''} · MV`;
   v.pause(); v.removeAttribute('src'); v.style.display = 'none';
-  ld.style.display = ''; ld.textContent = 'MV 解析中';
+  ld.style.display = ''; ld.textContent = 'MV 加载中';
   try {
     const r = await api(`/api/mv/url?mvid=${mvState.mvid}`);
     if (r.code === 200 && r.data && r.data.url) {
-      v.src = r.data.url;                                   // 官方接口解析的直链
+      v.src = r.data.url;                                   // 官方接口返回的直链
       v.style.display = '';
       ld.style.display = 'none';
       v.play().catch(() => {});
     } else {
-      ld.textContent = r.message || 'MV 解析失败';
+      ld.textContent = r.message || 'MV 加载失败';
     }
   } catch (e) {
-    ld.textContent = 'MV 解析失败';
+    ld.textContent = 'MV 加载失败';
   }
 }
 
@@ -3305,7 +3305,7 @@ async function downloadMv() {
   const filename = `${safeName(state.song.name)}-${safeName(state.song.singer)}-MV.mp4`;
   try {
     const r = await api(`/api/mv/url?mvid=${mvState.mvid}`);
-    if (r.code !== 200 || !r.data || !r.data.url) { toast(`MV 解析失败: ${r.message || '未知错误'}`, 'error'); return; }
+    if (r.code !== 200 || !r.data || !r.data.url) { toast(`MV 加载失败: ${r.message || '未知错误'}`, 'error'); return; }
     nativeDownload(filename, r.data.url);               // 完成后由原生事件弹窗提示路径
   } catch (e) {
     toast('MV 下载失败', 'error');

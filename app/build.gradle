@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 27
-        versionName '3.14'   // 歌单直搜兜底:残缺链接(缺playlist路径/域名拼错)含 id=数字 即强行提取解析
+        versionCode 28
+        versionName '3.15'   // 歌单直搜兜底:残缺链接(缺playlist路径/域名拼错)含 id=数字 即强行提取解析
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
