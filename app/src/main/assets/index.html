@@ -5,77 +5,113 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>网易云-播放/下载器</title>
 <style>
-  /* ============ VS Code 主题变量 ============ */
+  /* ============ 设计系统:Liquid Glass × 拟物 × 扁平 (HIG) ============
+     材质三档:thin/regular/thick 玻璃 + 顶部高光(拟物) + 扁平排版
+     动效:只动 transform/opacity;按压 140ms 弹性回弹;UI 220ms 强 ease-out */
   :root {
-    --bg: #1e1e1e;            /* 编辑器背景 */
-    --bg-panel: #252526;      /* 面板背景 */
-    --bg-hover: #2a2d2e;      /* 悬停 */
-    --bg-active: #3d1414;     /* 选中行背景(暗红) */
+    --bg: #17171a;             /* 深夜底色(玻璃需要更深的底才有通透对比) */
+    --bg-panel: #202024;
+    --bg-hover: rgba(255,255,255,.05);
     --bg-input: #3c3c3c;
-    --border: #3c3c3c;
-    --text: #cccccc;
+    --border: rgba(255,255,255,.08);
+    --text: #d6d6d8;
     --text-bright: #ffffff;
-    --muted: #858585;
-    --accent: #c20c0c;        /* 网易云红 */
-    --accent-hover: #ec4141;
-    --green: #89d185;
-    --red: #f48771;
-    --yellow: #cca700;
-    --selection: #264f78;
+    --muted: #8e8e93;          /* HIG systemGray */
+    --accent: #c20c0c;         /* 网易云红(深) */
+    --accent-hover: #ec4141;   /* 网易云红(亮) */
+    --brand-1: #ff6b5e;        /* 品牌渐变高光端 */
+    --grad-brand: linear-gradient(135deg, #ff6b5e 0%, #ec4141 42%, #c20c0c 100%);
+    --green: #30d158;          /* HIG systemGreen */
+    --red: #ff453a;            /* HIG systemRed */
+    --yellow: #ffd60a;         /* HIG systemYellow */
+    --selection: rgba(236,65,65,.28);
     --mono: "Consolas","Menlo","DejaVu Sans Mono",monospace;
-    --radius: 4px;
-    /* ====== 毛玻璃统一参数 ====== */
-    --glass-alpha: .5;           /* 面板/控件背景不透明度 50% */
-    --bgcover-blur: 48px;        /* 全局封面背景模糊强度(约70%档):单层渲染,GPU 缓存一次 */
+    /* ---- 液体玻璃材质 ---- */
+    --glass-thin: rgba(38,38,44,.38);
+    --glass-regular: rgba(32,32,38,.55);
+    --glass-thick: rgba(26,26,30,.74);
+    --glass-alpha: .55;
+    --glass-border: rgba(255,255,255,.09);
+    --hi-top: inset 0 1px 0 rgba(255,255,255,.10);       /* 玻璃顶部高光(拟物) */
+    --bgcover-blur: 10px;      /* 全局封面背景模糊:原48px的20%,封面更清晰 */
+    /* ---- 动效令牌(按压 100-160ms / UI ≤300ms) ---- */
+    --spring: cubic-bezier(.34,1.56,.64,1);     /* 弹性按压回弹 bounce≈0.25 */
+    --ease-out: cubic-bezier(.23,1,.32,1);      /* 强 ease-out:进出场 */
+    --ease-inout: cubic-bezier(.77,0,.175,1);   /* 屏内位移 */
+    --t-press: 140ms;
+    --t-ui: 220ms;
+    --t-pop: 300ms;
+    /* ---- 圆角(HIG 连续圆角感) ---- */
+    --r-sm: 8px; --r-md: 12px; --r-lg: 18px; --r-xl: 24px;
   }
-  * { box-sizing:border-box; margin:0; padding:0; }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; outline:none; }
+  html { overscroll-behavior:none; }              /* 禁安卓过度滚动发光 */
   body {
     background:var(--bg); color:var(--text);
     font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-    font-size:14px;
-    min-height:100vh;
-    padding-bottom:130px;
+    font-size:14px; min-height:100vh; padding-bottom:130px;
+    -webkit-font-smoothing:antialiased;
   }
+  button, input, .song, .chip { touch-action:manipulation; }   /* 消除双击缩放延迟 */
+  :focus-visible { outline:2px solid rgba(236,65,65,.65); outline-offset:2px; }  /* 键盘可达性(HIG) */
 
-  /* ============ 全局封面底层背景(单层预模糊,替代逐元素 backdrop-filter,大幅降低合成开销) ============ */
+  /* ============ 全局封面底层背景(单层预模糊,替代逐元素 backdrop-filter) ============ */
   #bgCover {
     position:fixed; inset:-80px; z-index:-1;
-    background:center/cover no-repeat #1e1e1e;
-    filter:blur(var(--bgcover-blur)) brightness(.5) saturate(150%);
-    transform:translateZ(0);        /* 提升为独立合成层:滚动时零重绘 */
+    background:center/cover no-repeat #17171a;
+    filter:blur(var(--bgcover-blur)) brightness(.42) saturate(165%);
+    transform:translateZ(0);        /* 独立合成层:滚动零重绘 */
     pointer-events:none;
   }
   ::selection { background:var(--selection); color:var(--text-bright); }
   ::-webkit-scrollbar { width:8px; height:8px; }
-  ::-webkit-scrollbar-thumb { background:#424242; border-radius:4px; }
-  ::-webkit-scrollbar-thumb:hover { background:#4f4f4f; }
+  ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.14); border-radius:99px; border:2px solid transparent; background-clip:padding-box; }
   ::-webkit-scrollbar-track { background:transparent; }
 
   .container { max-width:960px; margin:0 auto; padding:16px 18px; }
 
-  /* ============ 顶栏 ============ */
+  /* ============ 顶栏(品牌渐变标题) ============ */
   header { padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:14px; }
-  h1 { font-size:16px; font-weight:600; color:var(--text-bright); letter-spacing:.3px; }
-  h1 .sub { display:block; font-size:10.5px; color:var(--muted); font-weight:400; margin-top:2px; font-family:var(--mono); }
+  h1 {
+    font-size:17px; font-weight:700; letter-spacing:.3px;
+    background:var(--grad-brand); -webkit-background-clip:text; background-clip:text;
+    color:transparent; -webkit-text-fill-color:transparent;   /* 品牌渐变字 */
+    display:inline-block;
+  }
+  h1 .sub {
+    display:block; font-size:10.5px; font-weight:400; margin-top:2px; font-family:var(--mono);
+    color:var(--muted); -webkit-text-fill-color:var(--muted);
+    letter-spacing:1.5px;
+  }
 
-  /* ============ 搜索栏(只保留输入框+按钮) ============ */
+  /* ============ 搜索栏(拟物凹陷输入井 + 品牌渐变按钮) ============ */
   .search-bar { display:flex; gap:8px; margin-bottom:12px; }
   .search-bar input {
-    flex:1; padding:8px 13px; border-radius:var(--radius);
-    border:1px solid var(--border); background:rgba(60,60,60,var(--glass-alpha)); color:var(--text-bright);
-    font-size:13px; outline:none; transition:border-color .15s, box-shadow .15s;
-    font-family:var(--mono);
+    flex:1; padding:10px 14px; border-radius:var(--r-md);
+    border:1px solid var(--glass-border); background:rgba(16,16,18,.5); color:var(--text-bright);
+    font-size:13px; outline:none; font-family:var(--mono);
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.42), inset 0 -1px 0 rgba(255,255,255,.04);  /* 凹陷井 */
+    transition:border-color var(--t-ui) var(--ease-out), box-shadow var(--t-ui) var(--ease-out);
   }
-  .search-bar input:focus { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent); }
+  .search-bar input:focus {
+    border-color:rgba(236,65,65,.65);
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.42), 0 0 0 3px rgba(236,65,65,.16);
+  }
   .search-bar input::placeholder { color:var(--muted); }
   .btn {
-    padding:8px 18px; border-radius:var(--radius); border:none; cursor:pointer;
-    background:var(--accent); color:#fff; font-size:13px; font-weight:500;
-    transition:background .15s; user-select:none; white-space:nowrap;
+    padding:9px 20px; border-radius:var(--r-md); border:none; cursor:pointer;
+    background:var(--grad-brand); color:#fff; font-size:13px; font-weight:600;
+    user-select:none; white-space:nowrap;
+    box-shadow:0 3px 12px rgba(194,12,12,.38), inset 0 1px 0 rgba(255,255,255,.32), inset 0 -2px 4px rgba(0,0,0,.22);
+    transition:transform var(--t-press) var(--spring), box-shadow var(--t-press) var(--ease-out), filter var(--t-press) ease;
   }
-  .btn:hover { background:var(--accent-hover); }  .btn:active { transform:translateY(1px); }
+  @media (hover:hover) { .btn:hover { filter:brightness(1.13); } }
+  .btn:active {   /* 弹性按压:缩小+阴影收紧=物理按下 */
+    transform:scale(.955) translateY(1px);
+    box-shadow:0 1px 4px rgba(194,12,12,.32), inset 0 1px 0 rgba(255,255,255,.2), inset 0 -1px 2px rgba(0,0,0,.18);
+  }
 
-  /* ============ 网易云热门歌曲(15首) ============ */
+  /* ============ 网易云热门歌曲 ============ */
   .hot { margin-bottom:12px; }
   .hot-title {
     font-size:11px; color:var(--muted); margin-bottom:7px;
@@ -84,184 +120,206 @@
   .hot-title::after { content:""; flex:1; height:1px; background:var(--border); }
   .hot-list { display:flex; flex-wrap:wrap; gap:5px; }
   .chip {
-    color:var(--muted); font-size:11px; text-decoration:none; padding:3px 9px;
-    border:1px solid var(--border); border-radius:11px; cursor:pointer;
-    transition:all .15s; background:rgba(60,60,60,var(--glass-alpha)); font-family:inherit;
-    max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    color:var(--text); font-size:11px; text-decoration:none; padding:4px 11px;
+    border:1px solid var(--glass-border); border-radius:99px; cursor:pointer;
+    background:var(--glass-thin); font-family:inherit;
+    max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; user-select:none;
+    box-shadow:var(--hi-top);
+    transition:transform var(--t-press) var(--spring), color .15s ease, border-color .15s ease, background .15s ease;
   }
-  .chip:hover { color:var(--accent-hover); border-color:var(--accent); background:rgba(194,12,12,.25); }
+  @media (hover:hover) {
+    .chip:hover { color:var(--accent-hover); border-color:rgba(236,65,65,.5); background:rgba(194,12,12,.16); }
+  }
+  .chip:active { transform:scale(.93); }
   .chip .n { color:var(--accent-hover); margin-right:3px; font-family:var(--mono); font-size:10px; }
 
-  /* ============ 双栏布局:左歌词 / 右搜索结果(等权重) ============ */
-  .dash {
-    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; align-items:start;
-  }
+  /* ============ 双栏布局 ============ */
+  .dash { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; align-items:start; }
   .panel {
-    background:rgba(37,37,38,var(--glass-alpha)); border:1px solid var(--border); border-radius:var(--radius);
+    background:var(--glass-regular); border:1px solid var(--glass-border); border-radius:var(--r-md);
     padding:8px; min-height:200px; max-height:64vh; overflow-y:auto;
-    font-size:10px;               /* 字体缩小约 2 倍,防挤压穿插 */
-    scrollbar-width:none;         /* Firefox 隐藏滚动条 */
-    -ms-overflow-style:none;      /* IE/旧 Edge 隐藏滚动条 */
+    font-size:10px;
+    box-shadow:0 8px 28px rgba(0,0,0,.38), var(--hi-top);   /* 悬浮玻璃卡 */
+    scrollbar-width:none; -ms-overflow-style:none;
   }
-  /* WebKit 内核隐藏面板滚动条(仍可触摸/滚轮滚动) */
   .panel::-webkit-scrollbar { width:0; height:0; display:none; }
-  /* 列表标题(位于列表外上方、热门歌曲之下,带圆角) */
   .dash > .col { display:flex; flex-direction:column; min-width:0; }
   .panel-title {
     font-size:10.5px; color:var(--muted); font-family:var(--mono); letter-spacing:1px;
     margin-bottom:6px; display:flex; align-items:center; gap:6px;
-    background:rgba(37,37,38,var(--glass-alpha)); padding:5px 10px;
-    border-radius:var(--radius);           /* 标题圆角与列表一致 */
-    width:100%; height:27px; box-sizing:border-box;   /* 两栏标题等宽等高,与列表 1:1 权重对齐 */
-    white-space:nowrap; overflow:hidden;   /* 强制单行:标题永不换行(不用跑马灯),超出部分裁切 */
+    background:var(--glass-thin); padding:5px 10px;
+    border:1px solid var(--glass-border); border-radius:var(--r-md);
+    box-shadow:var(--hi-top);
+    width:100%; height:29px; box-sizing:border-box;
+    white-space:nowrap; overflow:hidden;
   }
-  .panel-title::after { content:""; flex:1; height:1px; background:var(--border); min-width:6px; }   /* 线条吸收挤压 */
-  /* 歌词同步校准控件(标题栏右侧) */
-  .calib { margin-left:auto; display:inline-flex; align-items:center; gap:4px; flex-shrink:0; }   /* 校准控件永不縮水 */
+  .panel-title::after { content:""; flex:1; height:1px; background:var(--border); min-width:6px; }
+  .calib { margin-left:auto; display:inline-flex; align-items:center; gap:4px; flex-shrink:0; }
   .calib button {
-    width:16px; height:16px; border-radius:3px; border:1px solid var(--border);
-    background:transparent; color:var(--muted); cursor:pointer;
+    width:17px; height:17px; border-radius:5px; border:1px solid var(--glass-border);
+    background:rgba(255,255,255,.05); color:var(--muted); cursor:pointer;
     font-size:10px; line-height:1; padding:0; font-family:var(--mono);
+    box-shadow:var(--hi-top);
+    transition:transform var(--t-press) var(--spring), color .15s ease, border-color .15s ease;
   }
-  .calib button:hover { color:var(--text-bright); border-color:var(--accent); }
-  #calVal { font-family:var(--mono); font-size:9px; color:var(--muted); min-width:26px; text-align:center; cursor:pointer; }
-  #calVal:hover { color:var(--text-bright); }
-  .panel .empty { color:#4d4d4d; text-align:center; padding:30px 0; font-family:var(--mono); font-size:9.5px; }
+  @media (hover:hover) { .calib button:hover { color:var(--text-bright); border-color:rgba(236,65,65,.6); } }
+  .calib button:active { transform:scale(.85); }
+  #calVal { font-family:var(--mono); font-size:9px; color:var(--muted); min-width:26px; text-align:center; cursor:pointer; transition:color .15s ease; }
+  @media (hover:hover) { #calVal:hover { color:var(--text-bright); } }
+  .panel .empty { color:#55555c; text-align:center; padding:30px 0; font-family:var(--mono); font-size:9.5px; }
 
-  /* ---- 左侧歌词 ---- */
+  /* ---- 左侧歌词(渐变高亮 + 微光晕) ---- */
   .lyrics div {
-    color:var(--muted); transition:color .2s, transform .2s; padding:1px 5px; border-radius:3px;
+    color:var(--muted); padding:1px 5px; border-radius:6px;
     font-size:10px; line-height:1.75; word-break:break-all;
+    transition:color var(--t-ui) var(--ease-out), transform var(--t-ui) var(--ease-out), background var(--t-ui) var(--ease-out);
   }
   .lyrics div.active {
     color:var(--text-bright); transform:translateX(4px);
     background:linear-gradient(90deg, rgba(194,12,12,.18), transparent);
     border-left:2px solid var(--accent);
+    text-shadow:0 0 14px rgba(236,65,65,.28);   /* 品牌微光 */
   }
 
   /* ---- 右侧搜索结果 ---- */
   .meta { color:var(--muted); font-size:9.5px; margin-bottom:5px; font-family:var(--mono); }
-  .song { display:flex; align-items:center; gap:6px; padding:7px 6px; border-radius:3px; cursor:pointer; border-left:2px solid transparent; transition:background .1s; }
-  .song:hover { background:var(--bg-hover); }
-  .song.playing { background:var(--bg-active); border-left-color:var(--accent); }
+  .song {
+    display:flex; align-items:center; gap:6px; padding:7px 6px; border-radius:var(--r-sm);
+    cursor:pointer; border-left:2px solid transparent; user-select:none;
+    transition:background .12s ease, transform var(--t-press) var(--spring);
+  }
+  @media (hover:hover) { .song:hover { background:var(--bg-hover); } }
+  .song:active { transform:scale(.985); }        /* 行级弹性按压 */
+  .song.playing { background:linear-gradient(90deg, rgba(194,12,12,.23), transparent); border-left-color:var(--accent); }
   .song.playing .name { color:var(--text-bright); }
   .song .idx { width:13px; min-width:13px; text-align:center; color:var(--muted); font-size:10px; flex-shrink:0; font-family:var(--mono); }
-  .song.playing .idx { color:var(--accent-hover); }
+  .song.playing .idx { color:#fff; opacity:.92; }
   .song .info { flex:1; min-width:0; white-space:nowrap; overflow:hidden; }
   .song .track { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; will-change:transform; }
   .song .name { font-size:10px; color:var(--text); font-weight:500; }
   .song .singer { font-size:10px; color:var(--muted); }
-  /* 内容超宽时横向滚动(跑马灯),两端停顿便于阅读 */
   .song .track.marquee { animation:songMarquee var(--dur,8s) ease-in-out infinite alternate; }
   @keyframes songMarquee {
     0%, 12%    { transform:translateX(0); }
     88%, 100%  { transform:translateX(calc(var(--dist, 0px) * -1)); }
   }
 
-
-  /* ============ 底部播放器(圆角卡片,极简) ============ */
+  /* ============ 底部播放器(液体玻璃主卡:渐变深色+顶部高光+品牌色投影) ============ */
   .player { position:fixed; left:0; right:0; bottom:0; z-index:100; display:flex; justify-content:center; padding:0 14px 14px; pointer-events:none; }
   .player-card {
     pointer-events:auto; width:100%; max-width:680px;
-    background:rgba(37,37,38,var(--glass-alpha));
-    border:1px solid var(--border); border-radius:16px;
+    background:linear-gradient(165deg, rgba(46,46,52,.6), rgba(24,24,28,.68));
+    border:1px solid rgba(255,255,255,.11); border-radius:var(--r-xl);
     padding:10px 14px; display:flex; align-items:center; gap:12px;
-    box-shadow:0 8px 30px rgba(0,0,0,.55);
+    box-shadow:0 16px 48px rgba(0,0,0,.62), 0 2px 10px rgba(194,12,12,.12), inset 0 1px 0 rgba(255,255,255,.13), inset 0 -1px 0 rgba(0,0,0,.32);
+    transform:translateZ(0);   /* 独立合成层 */
   }
   .play-btn {
-    width:40px; height:40px; border-radius:50%; border:none; cursor:pointer;
-    background:var(--accent); color:#fff; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center;
-    transition:background .15s, transform .1s;
+    width:42px; height:42px; border-radius:50%; border:none; cursor:pointer; flex-shrink:0;
+    background:var(--grad-brand); color:#fff;
+    display:flex; align-items:center; justify-content:center; user-select:none;
+    box-shadow:0 5px 16px rgba(236,65,65,.42), inset 0 2px 2px rgba(255,255,255,.35), inset 0 -3px 6px rgba(0,0,0,.3);  /* 拟物凸起 */
+    transition:transform var(--t-press) var(--spring), box-shadow var(--t-press) var(--ease-out);
   }
-  .play-btn:hover { background:var(--accent-hover); }
-  .play-btn:active { transform:scale(.92); }
-  .play-btn svg { width:18px; height:18px; fill:#fff; }
+  .play-btn:active {   /* 物理按下:下沉+阴影收拢+弹性缩小 */
+    transform:scale(.86);
+    box-shadow:0 2px 6px rgba(236,65,65,.36), inset 0 1px 1px rgba(255,255,255,.25), inset 0 -2px 4px rgba(0,0,0,.26);
+  }
+  .play-btn svg { width:18px; height:18px; fill:#fff; filter:drop-shadow(0 1px 1px rgba(0,0,0,.3)); }
   .p-info { flex:1; min-width:0; }
   .p-name { font-size:13.5px; color:var(--text-bright); overflow:hidden; }
   .p-artist { font-size:11.5px; color:var(--muted); margin-top:2px; overflow:hidden; }
-  /* 播放器跑马灯轨道:歌名+VIP标签(或歌手)作为整体来回滚动,不再被挤掉 */
   .p-track { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; will-change:transform; padding-right:16px; }
   .p-track.marquee { animation:songMarquee var(--dur,8s) ease-in-out infinite alternate; }
-  .p-name .tag3rd { color:#ffd700; font-size:10px; border:1px solid #6b5b00; border-radius:3px; padding:0 5px; font-family:var(--mono); flex-shrink:0; }
-  .p-progress { display:flex; align-items:center; gap:8px; flex-shrink:0; width:42%; min-width:120px; cursor:pointer; }
-  .p-bar { flex:1; height:4px; background:#3c3c3c; border-radius:2px; overflow:hidden; }
-  .p-fill { height:100%; width:0%; background:var(--accent); border-radius:2px; transition:width .2s linear; position:relative; }
-  .p-fill::after { content:""; position:absolute; right:-4px; top:50%; width:9px; height:9px; margin-top:-4.5px; border-radius:50%; background:var(--accent-hover); box-shadow:0 0 6px rgba(236,65,65,.8); }
+  .p-name .tag3rd {
+    color:#ffd60a; font-size:10px; background:rgba(255,214,10,.1);
+    border:1px solid rgba(255,214,10,.35); border-radius:4px; padding:0 5px;
+    font-family:var(--mono); flex-shrink:0;
+  }
+  .p-progress { display:flex; align-items:center; gap:8px; flex-shrink:0; width:42%; min-width:120px; cursor:pointer; padding:6px 0; }
+  .p-bar { flex:1; height:5px; background:rgba(255,255,255,.09); border-radius:3px; overflow:visible; box-shadow:inset 0 1px 2px rgba(0,0,0,.5); }
+  .p-fill { height:100%; width:0%; background:var(--grad-brand); border-radius:3px; transition:width .2s linear; position:relative; }
+  .p-fill::after {
+    content:""; position:absolute; right:-5px; top:50%; width:11px; height:11px; margin-top:-5.5px;
+    border-radius:50%; background:#fff;
+    border:2px solid var(--accent-hover); box-shadow:0 0 8px rgba(236,65,65,.55);
+    transition:transform var(--t-press) var(--spring);
+  }
+  .p-progress:active .p-fill::after { transform:scale(1.5); }   /* 拖动时滑块弹性放大 */
   .p-time { font-family:var(--mono); font-size:10.5px; color:var(--muted); white-space:nowrap; }
 
-  /* ============ 下载标签按钮 + 居中弹窗 ============ */
+  /* ============ 下载标签 + 弹窗 ============ */
   .dl-tag {
     flex-shrink:0; cursor:pointer; font-family:var(--mono);
-    font-size:10.5px; color:var(--accent-hover); background:transparent;
-    border:1px solid var(--border); border-radius:11px;
-    width:44px; padding:3px 0; text-align:center;   /* 统一固定尺寸:MV/下载标签完全一致 */
-    transition:all .15s; user-select:none;
-    box-sizing:border-box; line-height:1.4;
+    font-size:10.5px; color:var(--accent-hover); background:rgba(255,255,255,.05);
+    border:1px solid var(--glass-border); border-radius:99px;
+    width:44px; padding:4px 0; text-align:center; user-select:none;
+    box-sizing:border-box; line-height:1.4; box-shadow:var(--hi-top);
+    transition:transform var(--t-press) var(--spring), border-color .15s ease, background .15s ease;
   }
-  .dl-tag:hover { border-color:var(--accent); background:rgba(194,12,12,.08); }
-  .dl-tag:active { transform:translateY(1px); }
-  /* MV 弹窗视频播放器(严格限制在弹窗内) */
+  @media (hover:hover) { .dl-tag:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
+  .dl-tag:active { transform:scale(.9); }
   #mvModal .modal-box { width:min(340px, 88vw); }
   .modal-box video {
     display:block; width:100%; max-width:100%; max-height:48vh;
-    border-radius:8px; background:#000; margin-bottom:2px;
+    border-radius:var(--r-md); background:#000; margin-bottom:2px;
     object-fit:contain;
   }
-
   .modal-mask {
     position:fixed; inset:0; z-index:1000; display:none;
     align-items:center; justify-content:center;
-    background:rgba(0,0,0,.55); backdrop-filter:blur(2px);
+    background:rgba(0,0,0,.6);
+  }
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    .modal-mask { -webkit-backdrop-filter:blur(4px) saturate(140%); backdrop-filter:blur(4px) saturate(140%); }  /* 唯一小面积实时模糊 */
   }
   .modal-mask.show { display:flex; }
   .modal-box {
     position:relative; width:min(300px, 84vw);
-    background:rgba(37,37,38,var(--glass-alpha)); border:1px solid var(--border); border-radius:12px;   /* 背景透明度与列表一致 */
-    padding:20px 24px 24px; box-shadow:0 12px 40px rgba(0,0,0,.6);
+    background:linear-gradient(168deg, rgba(48,48,54,.82), rgba(26,26,30,.88));
+    border:1px solid rgba(255,255,255,.12); border-radius:20px;
+    padding:20px 24px 24px;
+    box-shadow:0 24px 70px rgba(0,0,0,.68), inset 0 1px 0 rgba(255,255,255,.14), inset 0 -1px 0 rgba(0,0,0,.3);
     display:flex; flex-direction:column; align-items:center;
-    animation:popIn .16s ease-out;
+    animation:popIn var(--t-pop) var(--spring);   /* 弹性入场 */
   }
-  @keyframes popIn { from { opacity:0; transform:scale(.92); } to { opacity:1; transform:none; } }
+  @keyframes popIn { from { opacity:0; transform:scale(.92) translateY(8px); } to { opacity:1; transform:none; } }
   .modal-x {
     position:absolute; top:8px; right:10px; background:none; border:none;
     color:var(--muted); font-size:17px; line-height:1; cursor:pointer; padding:2px 4px;
+    transition:transform var(--t-press) var(--spring), color .15s ease;
   }
-  .modal-x:hover { color:var(--text-bright); }
+  @media (hover:hover) { .modal-x:hover { color:var(--text-bright); } }
+  .modal-x:active { transform:scale(.85) rotate(90deg); }
   .modal-title { color:var(--text-bright); font-size:13.5px; letter-spacing:.5px; margin-bottom:14px; }
-  #dlSongName { display:inline-block; vertical-align:bottom; max-width:min(210px,58vw); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }   /* 单行显示,过长省略号截断 */
+  #dlSongName { display:inline-block; vertical-align:bottom; max-width:min(210px,58vw); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .modal-btn {
-    width:100%; max-width:210px; padding:9px 0; margin-top:10px;
-    border-radius:var(--radius); border:none; cursor:pointer;
-    background:rgba(60,60,60,var(--glass-alpha)); color:#fff; font-size:13px; font-weight:500;   /* 与下载歌词按钮配色一致 */
-    box-shadow:0 3px 10px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.12);   /* 阴影+顶部高光:与弹窗同透明度也能看出按钮层次 */
-    transition:background .15s, box-shadow .15s;
+    width:100%; max-width:210px; padding:10px 0; margin-top:10px;
+    border-radius:var(--r-md); border:none; cursor:pointer; user-select:none;
+    background:var(--grad-brand); color:#fff; font-size:13px; font-weight:600;
+    box-shadow:0 4px 14px rgba(194,12,12,.4), inset 0 1px 0 rgba(255,255,255,.3), inset 0 -2px 4px rgba(0,0,0,.22);
+    transition:transform var(--t-press) var(--spring), box-shadow var(--t-press) var(--ease-out), filter var(--t-press) ease;
   }
-  .modal-btn:hover { background:rgba(74,74,74,var(--glass-alpha)); box-shadow:0 4px 14px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.18); }
-  .modal-btn:active { transform:translateY(1px); }
-
-  /* ============ 启动引导浮层:后端未就绪时显示,首个接口成功即自动消失 ============ */
-  #bootTip {
-    position:fixed; left:50%; top:16%; transform:translateX(-50%); z-index:1200;
-    padding:7px 16px; border-radius:14px; pointer-events:none;
-    background:rgba(37,37,38,.85); border:1px solid var(--accent);
-    color:var(--accent-hover); font-family:var(--mono); font-size:12px;
-    box-shadow:0 4px 18px rgba(0,0,0,.5);
-    animation:bootPulse 1.2s ease-in-out infinite;
+  @media (hover:hover) { .modal-btn:hover { filter:brightness(1.12); } }
+  .modal-btn:active { transform:scale(.96) translateY(1px); box-shadow:0 1px 5px rgba(194,12,12,.3), inset 0 1px 0 rgba(255,255,255,.2); }
+  .modal-btn.secondary {   /* 次要动作:玻璃扁平 */
+    background:rgba(255,255,255,.07); color:var(--text-bright);
+    border:1px solid var(--glass-border);
+    box-shadow:var(--hi-top);
   }
-  @keyframes bootPulse { 0%,100%{opacity:.55} 50%{opacity:1} }
+  .modal-btn.secondary:active { box-shadow:inset 0 1px 0 rgba(255,255,255,.08); }
 
-  /* ============ Toast 通知(VS Code 风格) ============ */
+  /* ============ Toast(玻璃胶囊 + 弹性入场) ============ */
   #toasts { position:fixed; right:16px; bottom:105px; z-index:999; display:flex; flex-direction:column; gap:8px; width:320px; max-width:80vw; }
   .toast {
     display:flex; align-items:flex-start; gap:10px;
-    background:#333333; border:1px solid #424242; border-left:3px solid var(--accent);
-    color:var(--text); border-radius:var(--radius); padding:10px 12px;
+    background:rgba(40,40,46,.94); border:1px solid rgba(255,255,255,.09); border-left:3px solid var(--accent);
+    color:var(--text); border-radius:var(--r-md); padding:10px 12px;
     font-size:12.5px; line-height:1.5; word-break:break-all;
-    box-shadow:0 4px 14px rgba(0,0,0,.45);
-    animation:toastIn .18s ease-out;
+    box-shadow:0 8px 24px rgba(0,0,0,.5), var(--hi-top);
+    animation:toastIn var(--t-pop) var(--spring);
   }
-  .toast.info { border-left-color:var(--accent); }
+  .toast.info { border-left-color:var(--accent-hover); }
   .toast.success { border-left-color:var(--green); }
   .toast.warn { border-left-color:var(--yellow); }
   .toast.error { border-left-color:var(--red); }
@@ -272,32 +330,32 @@
   .toast.error .toast-icon { color:var(--red); }
   .toast .toast-msg { flex:1; min-width:0; white-space:pre-line; }
   .toast .toast-close { background:none; border:none; color:var(--muted); cursor:pointer; font-size:15px; padding:0 2px; line-height:1; flex-shrink:0; }
-  .toast .toast-close:hover { color:var(--text-bright); }
-  .toast.hide { opacity:0; transform:translateX(20px); transition:all .25s; }
-  @keyframes toastIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:none; } }
+  @media (hover:hover) { .toast .toast-close:hover { color:var(--text-bright); } }
+  .toast.hide { opacity:0; transform:translateX(24px) scale(.96); transition:opacity .25s var(--ease-out), transform .25s var(--ease-out); }
+  @keyframes toastIn { from { opacity:0; transform:translateX(36px) scale(.94); } to { opacity:1; transform:none; } }
 
-  /* ============ 迷你下载任务面板(固定在页面顶部最右,与标题「网易云-播放/下载器」同排;
-     可收缩;进度到 100% 显示「即将完成」;无进行中任务时短暂展示后自动消失) ============ */
+  /* ============ 下载任务面板(品牌色玻璃) ============ */
   #dlPanel {
     position:fixed; top:10px; right:12px; z-index:998;
     width:212px; max-width:56vw;
-    background:rgba(24,16,17,.94); border:1px solid rgba(236,65,65,.35); border-radius:8px;
-    box-shadow:0 6px 18px rgba(0,0,0,.45); overflow:hidden;
-    animation:toastIn .18s ease-out;
+    background:rgba(26,17,18,.93); border:1px solid rgba(236,65,65,.35); border-radius:14px;
+    box-shadow:0 10px 32px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.09); overflow:hidden;
+    animation:toastIn var(--t-pop) var(--spring);
   }
   #dlPanel.hidden { display:none; }
   .dl-head {
-    display:flex; align-items:center; gap:6px; padding:5px 9px;
+    display:flex; align-items:center; gap:6px; padding:6px 10px;
     cursor:pointer; user-select:none;
-    background:rgba(194,12,12,.2); color:#fff; font-size:10.5px;
+    background:linear-gradient(90deg, rgba(194,12,12,.4), rgba(236,65,65,.18)); color:#fff; font-size:10.5px;
     font-family:var(--mono); letter-spacing:.5px;
+    transition:filter .15s ease;
   }
-  .dl-head:hover { background:rgba(194,12,12,.32); }
-  .dl-head .dl-arrow { margin-left:auto; transition:transform .22s; font-size:9px; }
+  @media (hover:hover) { .dl-head:hover { filter:brightness(1.2); } }
+  .dl-head .dl-arrow { margin-left:auto; transition:transform var(--t-ui) var(--spring); font-size:9px; }
   #dlPanel.collapsed .dl-arrow { transform:rotate(-90deg); }
   #dlPanel.collapsed .dl-list { display:none; }
   .dl-list { max-height:168px; overflow-y:auto; overscroll-behavior:contain; }
-  .dl-item { padding:5px 9px; border-top:1px solid rgba(255,255,255,.05); cursor:pointer; }
+  .dl-item { padding:5px 10px; border-top:1px solid rgba(255,255,255,.05); cursor:pointer; }
   .dl-item .nm { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:3px; font-size:10.5px; color:var(--text); }
   .dl-item .dl-nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .dl-item .pc { flex-shrink:0; font-size:9.5px; color:var(--accent-hover); font-family:var(--mono); }
@@ -306,20 +364,25 @@
   .dl-item.sys .pc { color:var(--yellow); }
   .dl-bar { height:3px; border-radius:2px; background:rgba(255,255,255,.08); overflow:hidden; }
   .dl-bar i { display:block; height:100%; width:0%; border-radius:2px;
-    background:linear-gradient(90deg,var(--accent),var(--accent-hover)); transition:width .35s ease-out; }
+    background:var(--grad-brand); transition:width .35s var(--ease-out); }
   .dl-item.done .dl-bar i { background:var(--green); }
   .dl-item.fail .dl-bar i { background:var(--red); }
-  .dl-path {
-    margin-top:4px; font-size:9px; font-family:var(--mono); color:var(--muted);
-    word-break:break-all; line-height:1.4;
-  }
+  .dl-path { margin-top:4px; font-size:9px; font-family:var(--mono); color:var(--muted); word-break:break-all; line-height:1.4; }
 
   .loading { color:var(--muted); text-align:center; padding:30px 0; font-family:var(--mono); font-size:10px; }
   .loading::after { content:"…"; animation:dots 1s steps(4) infinite; }
   @keyframes dots { 0%{content:""} 25%{content:"."} 50%{content:".."} 75%{content:"..."} }
   .err { color:var(--red); text-align:center; padding:18px; font-size:11px; }
 
-  /* ====== PC 大屏适配:容器加宽、字号微调 ====== */
+  /* ====== 动效豁免:系统减弱动态效果(HIG) ====== */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration:.01ms !important; animation-iteration-count:1 !important;
+      transition-duration:.01ms !important;
+    }
+  }
+
+  /* ====== PC 大屏适配 ====== */
   @media (min-width:1024px) {
     .container { max-width:1180px; padding:22px 28px; }
     body { font-size:15px; }
@@ -327,11 +390,10 @@
     .lyrics div { font-size:11.5px; }
     .song .idx, .song .name, .song .singer { font-size:11.5px; }
   }
-
   @media (max-width:600px) {
     .p-progress { width:34%; min-width:88px; }
-    .player-card { padding:9px 12px; gap:9px; }
-    .play-btn { width:36px; height:36px; }
+    .player-card { padding:9px 12px; gap:9px; border-radius:20px; }
+    .play-btn { width:38px; height:38px; }
   }
 </style>
 </head>
@@ -346,7 +408,7 @@
   </header>
 
   <div class="search-bar">
-    <input id="kw" autocomplete="off" enterkeyhint="search" placeholder="搜索歌曲 / 歌手 / 专辑…" onkeydown="if(event.key==='Enter')doSearch(1)">
+    <input id="kw" autocomplete="off" enterkeyhint="search" placeholder="搜索歌曲/歌手/专辑 或粘贴歌单链接/ID" onkeydown="if(event.key==='Enter')doSearch(1)">
     <button class="btn" onclick="doSearch(1)">搜索</button>
   </div>
 
@@ -367,7 +429,7 @@
       </div>
     </div>
     <div class="col">
-      <h3 class="panel-title">搜索结果 RESULTS <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button></span></h3>
+      <h3 class="panel-title">列表 PLAYLIST <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button><button id="srcToggle" type="button" title="切换 歌单/单曲 数据" style="display:none">♫</button></span></h3>
       <div class="panel" id="resultPanel">
         <div class="empty" id="resultEmpty">ᕙ(  •̀ ᗜ •́  )ᕗ</div>
         <div id="resultBody"></div>
@@ -407,7 +469,7 @@
     <button class="modal-x" onclick="closeMvModal()" title="关闭">○</button>
     <div class="modal-title" id="mvTitle">▶ MV播放器</div>
     <video id="mvVideo" controls playsinline style="display:none"></video>
-    <div class="loading" id="mvLoading">MV 解析中</div>
+    <div class="loading" id="mvLoading">MV 加载中</div>
     <button class="modal-btn" onclick="downloadMv()">下载 MV</button>
   </div>
 </div>
@@ -472,7 +534,7 @@ function api(path) {
 window.__onApiResult = (id, status, body) => {
   const p = _pending[id]; if (!p) return;           // 过期/超时结果丢弃
   delete _pending[id]; clearTimeout(p.timer);
-  try { p.resolve(JSON.parse(body)); } catch (e) { p.reject(new Error('响应解析失败')); }
+  try { p.resolve(JSON.parse(body)); } catch (e) { p.reject(new Error('响应处理失败')); }
 };
 
 /* ============ 迷你下载任务面板(可收缩)+ 下载器事件 ============
@@ -638,19 +700,15 @@ function playHot(i) {
   silentSearch(song.name);    // 再自动搜索同名歌名填充结果面板
 }
 
-/* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + 轻浮层提示 ============
- * 兜底逻辑:若首个 API 调用因任何原因失败(如极端情况下的桥延迟),
- * 首次失败才显示「服务启动中…」浮层(避免正常启动闪现),每 500ms 自动重试
- * 拉取热门歌曲,成功即隐藏;桌面浏览器 fetch 模式同样适用。 */
+/* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============
+ * 若首个 API 调用因任何原因失败(如极端情况下的桥延迟),仅首次失败弹一次
+ * 「服务正在启动中」toast(不遮挡界面),每 500ms 自动重试拉取热门歌曲。
+ * 注:Java 桥已改为排队模式(Python 就绪前请求挂起等待),正常冷启动不会走到这里。 */
 let bootTries = 0, bootDone = false;
-const bootTip = document.createElement('div');
-bootTip.id = 'bootTip'; bootTip.style.display = 'none';
-bootTip.textContent = '⏳ 服务启动中…';
-document.body.appendChild(bootTip);
-function hideBootTip() { if (!bootDone) { bootDone = true; bootTip.remove(); } }
+function hideBootTip() { bootDone = true; }
 async function bootLoop() {
   if (await loadHotSongs()) { hideBootTip(); return; }
-  if (++bootTries === 1) bootTip.style.display = 'block';
+  if (++bootTries === 1) toast('服务正在启动中…', 'info', 2500);
   if (bootTries < 60) setTimeout(bootLoop, 500);   // 最多重试约 30 秒
 }
 bootLoop();
@@ -791,6 +849,138 @@ async function autoFill(minCount) {
   }
 }
 
+/* ══════════ 链接直搜：识别歌单/单曲/歧义残链，官方接口取数后整包装入列表 ══════════
+ * 支持：① 歌单 PC/手机端 playlist?id=N、/playlist/N 路径
+ *       ② 单曲 song?id=N(PC/手机端)、/song/N 路径
+ *       ③ 纯数字 ≥6 位：默认按歌单处理(失败自动回退普通搜索)
+ *       ④ 残缺链接兜底：含 id=数字 但无法区分歌单/单曲 → 双路获取,标题栏 ♫ 切换 */
+function parseMusicLink(kw) {
+  const t = kw.trim();
+  let m;
+  if ((m = t.match(/song\?id=(\d+)/i)) || (m = t.match(/\/song\/(\d+)/)))
+    return { type: 'song', id: m[1] };
+  if ((m = t.match(/playlist\?id=(\d+)/i)) || (m = t.match(/\/playlist\/(\d+)/)))
+    return { type: 'playlist', id: m[1] };
+  if (/^\d{6,}$/.test(t)) return { type: 'playlist', id: t };
+  const f = t.match(/[?&]id=(\d+)/i);
+  if (f && f[1].length >= 5) return { type: 'both', id: f[1] };
+  return null;
+}
+
+async function loadPlaylist(pid, fromUrl, seq) {
+  $('resultEmpty').style.display = 'none';
+  $('resultBody').innerHTML = '<div class="loading">歌单加载中</div>';
+  state.kw = '';   // 一次性载入:清空关键词即可禁用下滑分页/自动补齐(loadMore/autoFill 均有 !state.kw 保护)
+  try {
+    const r = await api(`/api/songlist?id=${encodeURIComponent(pid)}&limit=500`);
+    if (seq !== searchSeq) return null;
+    if (r.code !== 200 || !(r.data && r.data.list && r.data.list.length)) {
+      if (!fromUrl) { await runSearch(pid, 1, false, true); return null; }   // 纯数字不是有效歌单:回退普通搜索
+      const msg = r.message || '歌单加载失败';
+      $('resultBody').innerHTML = `<div class="err">${esc(msg)}</div>`;
+      toast(msg, 'error');
+      return null;
+    }
+    const d = r.data, info = d.info || {};
+    applyListData(d.list,
+      `♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${d.list.length} 首${info.play_count ? ' · ' + info.play_count : ''}`);
+    toast(`歌单「${info.name || pid}」已加载 ${d.list.length} 首`, 'success', 2500);
+    return { list: d.list, meta: `♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${d.list.length} 首` };
+  } catch (e) {
+    if (seq !== searchSeq) return null;
+    if (!fromUrl) { await runSearch(pid, 1, false, true); return null; }
+    $('resultBody').innerHTML = '<div class="err">歌单请求失败</div>';
+    toast('歌单请求失败', 'error');
+    return null;
+  }
+}
+
+/* 整包套用一组歌曲数据到结果列表(歌单/单曲/双路切换共用) */
+function applyListData(list, metaText) {
+  state.list = list;
+  state.total = list.length;
+  state.allPage = 0; state.page = 1;
+  renderResults();
+  const meta = document.querySelector('#resultBody .meta');
+  if (meta && metaText) meta.textContent = '// ' + metaText;
+  autoFill(PC_INIT_TARGET);
+}
+
+/* 单曲链接官方取数:songmid → 歌曲详情整包。collectOnly=true 时只取数不渲染(双路获取用) */
+async function loadSingleSong(sid, seq, collectOnly) {
+  $('resultEmpty').style.display = 'none';
+  if (!collectOnly) {
+    $('resultBody').innerHTML = '<div class="loading">歌曲加载中</div>';
+    state.kw = '';
+  }
+  try {
+    const r = await api(`/api/songdetail?songmid=${encodeURIComponent(sid)}`);
+    if (seq !== searchSeq) return null;
+    if (r.code !== 200 || !(r.data && r.data.list && r.data.list.length)) {
+      if (!collectOnly) {
+        const msg = r.message || '歌曲加载失败';
+        $('resultBody').innerHTML = `<div class="err">${esc(msg)}</div>`;
+        toast(msg, 'error');
+      }
+      return null;
+    }
+    const list = r.data.list, s0 = list[0];
+    if (collectOnly) return list;
+    applyListData(list, `♪ ${s0.name} · ${s0.singer} · 单曲直连`);
+    toast(`已加载单曲「${s0.name}」`, 'success', 2000);
+    return list;
+  } catch (e) {
+    if (seq !== searchSeq) return null;
+    if (!collectOnly) {
+      $('resultBody').innerHTML = '<div class="err">歌曲请求失败</div>';
+      toast('歌曲请求失败', 'error');
+    }
+    return null;
+  }
+}
+
+/* ═══ 歧义残链双路获取:歌单优先展示,单曲后台就绪后点亮 ♫ 切换标签 ═══ */
+let dualSets = null;   // { pl:[...], plMeta:'', song:[...], showing:'pl'|'song' }
+function setSwitchTab(active) {
+  const b = $('srcToggle');
+  b.style.display = dualSets ? '' : 'none';
+  b.style.color = active ? 'var(--accent)' : 'var(--muted)';
+  b.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+}
+async function loadDualFallback(id, seq) {
+  dualSets = null; setSwitchTab(false);
+  $('resultEmpty').style.display = 'none';
+  $('resultBody').innerHTML = '<div class="loading">链接不完整，歌单+单曲同时获取中</div>';
+  state.kw = '';
+  const songP = loadSingleSong(id, seq, true);          // 并发:单曲只收集
+  const plRes = await loadPlaylist(id, true, seq);      // 歌单优先展示
+  if (seq !== searchSeq) return;
+  const songList = await songP;
+  if (plRes && songList) {
+    dualSets = { pl: plRes.list, plMeta: plRes.meta, song: songList, showing: 'pl' };
+    setSwitchTab(false);   // 显示按钮(默认态配色)
+    toast('链接不完整:已同时获取歌单与单曲，点标题栏右侧 ♫ 切换', 'info', 3500);
+  } else if (!plRes && songList) {
+    applyListData(songList, `♪ ${songList[0].name} · ${songList[0].singer} · 单曲直连`);
+    toast(`已加载单曲「${songList[0].name}」`, 'success', 2000);
+  }
+}
+$('srcToggle').addEventListener('click', () => {
+  if (!dualSets || !dualSets.song || !dualSets.pl) return;
+  if (dualSets.showing === 'pl') {
+    dualSets.showing = 'song';
+    const s0 = dualSets.song[0];
+    applyListData(dualSets.song, `♪ ${s0.name} · ${s0.singer} · 单曲直连`);
+    setSwitchTab(true);
+    toast('已切换为单曲数据', 'success', 1500);
+  } else {
+    dualSets.showing = 'pl';
+    applyListData(dualSets.pl, dualSets.plMeta);
+    setSwitchTab(false);
+    toast('已切回歌单数据', 'success', 1500);
+  }
+})
+
 async function doSearch() {
   const kw = $('kw').value.trim();
   if (!kw) return;
@@ -803,8 +993,18 @@ async function silentSearch(kw) {
   await runSearch(kw, 1, false);
 }
 
-async function runSearch(kw, p, toastOn) {
-  const seq = ++searchSeq;   // 新搜索开始:作废所有在途旧搜索/旧预取响应
+async function runSearch(kw, p, toastOn, noPlaylist) {
+  const seq = ++searchSeq;   // 新搜索开始：作废所有在途旧搜索/旧预取响应
+  if (p === 1 && !noPlaylist) {
+    dualSets = null; setSwitchTab(false);          // 新搜索开始:重置双路状态与切换标签
+    const ml = parseMusicLink(kw);
+    if (ml) {
+      state.page = 1;
+      if (ml.type === 'song') { await loadSingleSong(ml.id, seq); return; }
+      if (ml.type === 'playlist') { await loadPlaylist(ml.id, true, seq); return; }
+      await loadDualFallback(ml.id, seq); return;   // 残缺无法区分:歌单+单曲双路获取
+    }
+  }
   // 只刷新搜索结果面板
   state.kw = kw;             // 记住关键词,供下滑自动加载使用
   $('resultEmpty').style.display = 'none';
@@ -859,11 +1059,60 @@ $('resultPanel').addEventListener('scroll', () => {
 /* ============ 播放(不自动触发,需用户点击) ============ */
 let playSeq = 0;   // 播放请求序号(latest-wins):连点切歌时,过期响应一律丢弃
 
+/* ══════════ 统一取链容错：超时重试 + 失败回滚（官方/VIP兑底通道共用） ══════════
+ * 单次请求 4 秒未返回即视为超时，自动重试最多 3 次；
+ * 全部失败提示网络差并回滚到之前正在播放的歌曲继续播。 */
+const URL_TIMEOUT_MS = 4000, URL_MAX_RETRY = 3;
+
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('请求超时')), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/* 返回：成功响应对象 | 'EXPIRED'=期间已切歌 | 'FAILED'=三次均失败 */
+async function fetchUrlWithRetry(song, seq, onRetry) {
+  for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
+    try {
+      const r = await withTimeout(
+        api(`/api/url?songmid=${encodeURIComponent(song.songmid)}&quality=${QUALITY}`), URL_TIMEOUT_MS);
+      if (seq !== playSeq) return 'EXPIRED';
+      if (r.code === 200 && r.data && r.data.url) return r;
+      throw new Error(r.message || '加载失败');       // 业务失败同样计入重试
+    } catch (e) {
+      if (seq !== playSeq) return 'EXPIRED';
+      if (attempt >= URL_MAX_RETRY) return 'FAILED';
+      if (onRetry) onRetry(attempt);
+    }
+  }
+  return 'FAILED';
+}
+
+/* 回滚到切换前的歌曲：恢复高亮/信息/校准并续播（audio.src 未被覆盖，原地 resume） */
+function rollbackPlayback(prev) {
+  if (!prev) return;
+  state.song = prev.song; state.songIndex = prev.index; state.playList = prev.plist;
+  document.querySelectorAll('#resultBody .song').forEach(el => el.classList.remove('playing'));
+  const row = $(`song-${prev.song.songmid}`);
+  if (row) row.classList.add('playing');
+  setPlayerLine($('nowName'), esc(prev.song.name));
+  setPlayerLine($('nowArtist'), esc(`${prev.song.singer} · ${prev.song.albumName || ''}`.replace(/·\s*$/, '').trim() || prev.song.singer));
+  setBgCover(prev.song.img);
+  loadSongCal();
+  const a = $('audio');
+  if (a.src) a.play().catch(() => { });
+}
+
 async function play(i, list) {
   const src = list || state.list;
   const song = src[i];
   if (!song) return;
   const seq = ++playSeq;          // 领取本次播放序号
+  // ═══ 回滚点：记录切换前的播放状态（总失败时恢复） ═══
+  const prev = (state.song && state.song.songmid !== song.songmid)
+    ? { song: state.song, index: state.songIndex, plist: state.playList } : null;
   state.song = song;
   state.songIndex = i;
   state.playList = src;   // 记住当前播放来源列表(供自动连播使用)
@@ -881,24 +1130,40 @@ async function play(i, list) {
   setBgCover(song.img);   // 官方接口返回的专辑封面 → 页面底层模糊背景
   loadSongCal();          // 载入这首歌的用户校准值(按 songmid 记忆)
   checkMv(song, seq);     // 异步检测该曲是否有官方 MV → 显示/隐藏 MV 标签
+  toast(`正在加载「${song.name}」…`, 'info', 2000);   // 切歌即时反馈(官方/VIP兑底统一生效)
   try {
-    const r = await api(`/api/url?songmid=${song.songmid}&quality=${QUALITY}`);
-    if (seq !== playSeq) return;                    // 过期响应:用户已切歌,丢弃
+    const res = await fetchUrlWithRetry(song, seq, (attempt) => {
+      if (seq === playSeq) {
+        setPlayerLine($('nowName'), `加载中(${attempt}/${URL_MAX_RETRY})… ${esc(song.name)}`);
+        toast(`响应超时，自动重试 ${attempt}/${URL_MAX_RETRY - 1}`, 'warn', 1500);
+      }
+    });
+    if (res === 'EXPIRED') return;                  // 过期响应:用户已切歌,丢弃
+    if (res === 'FAILED') {                         // 三次均失败:提示 + 回滚上一曲
+      setPlayerLine($('nowName'), '网络较差');
+      setPlayerLine($('nowArtist'), '稍后重新尝试');
+      toast('当前网络环境较差，稍后重新尝试', 'error', 3000);
+      rollbackPlayback(prev);
+      return;
+    }
+    const r = res;
     if (r.code !== 200) {
       setPlayerLine($('nowName'), '播放失败');
       setPlayerLine($('nowArtist'), esc(r.message || ''));
       toast(`播放失败: ${r.message}`, 'error');
+      rollbackPlayback(prev);
       return;
     }
     const viaTag = r.data.via === 'toubiec' ? '<span class="tag3rd">VIP</span>' : '';
     setPlayerLine($('nowName'), `${esc(song.name)}${viaTag}`);   // 歌名+VIP标签作为整体跑马灯
-    if (r.data.via === 'toubiec') toast(`已通过VIP通道解析播放「${song.name}」`, 'warn', 3000);
+    if (r.data.via === 'toubiec') toast(`已通过VIP通道播放「${song.name}」`, 'warn', 3000);
     audio.src = r.data.url;
     audio.play().catch(() => { });   // 自动播放被拦截时静默,用户手动点击播放即可
   } catch (e) {
     if (seq !== playSeq) return;
     setPlayerLine($('nowName'), '播放失败');
     toast('播放失败', 'error');
+    rollbackPlayback(prev);
   }
   if (seq === playSeq) loadLyric(song, seq);
 }
@@ -1029,19 +1294,19 @@ async function openMvModal() {
   const v = $('mvVideo'), ld = $('mvLoading');
   $('mvTitle').textContent = `▶ ${state.song ? state.song.name : ''} · MV`;
   v.pause(); v.removeAttribute('src'); v.style.display = 'none';
-  ld.style.display = ''; ld.textContent = 'MV 解析中';
+  ld.style.display = ''; ld.textContent = 'MV 加载中';
   try {
     const r = await api(`/api/mv/url?mvid=${mvState.mvid}`);
     if (r.code === 200 && r.data && r.data.url) {
-      v.src = r.data.url;                                   // 官方接口解析的直链
+      v.src = r.data.url;                                   // 官方接口返回的直链
       v.style.display = '';
       ld.style.display = 'none';
       v.play().catch(() => {});
     } else {
-      ld.textContent = r.message || 'MV 解析失败';
+      ld.textContent = r.message || 'MV 加载失败';
     }
   } catch (e) {
-    ld.textContent = 'MV 解析失败';
+    ld.textContent = 'MV 加载失败';
   }
 }
 
@@ -1057,7 +1322,7 @@ async function downloadMv() {
   const filename = `${safeName(state.song.name)}-${safeName(state.song.singer)}-MV.mp4`;
   try {
     const r = await api(`/api/mv/url?mvid=${mvState.mvid}`);
-    if (r.code !== 200 || !r.data || !r.data.url) { toast(`MV 解析失败: ${r.message || '未知错误'}`, 'error'); return; }
+    if (r.code !== 200 || !r.data || !r.data.url) { toast(`MV 加载失败: ${r.message || '未知错误'}`, 'error'); return; }
     nativeDownload(filename, r.data.url);               // 完成后由原生事件弹窗提示路径
   } catch (e) {
     toast('MV 下载失败', 'error');
@@ -1081,10 +1346,26 @@ async function loadLyric(song, seq) {
   const songKey = song.songmid;
   // 先清空歌词面板(防止上一首残留导致高亮"原地不动")
   renderLyricsEmpty();
+  /* ═══ 统一容错(与取链路一致):4 秒超时 × 3 次,仅网络超时才重试,"暂无歌词"不重试 ═══ */
+  let r = null;
+  for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
+    try {
+      r = await withTimeout(api(`/api/lyric?songmid=${encodeURIComponent(songKey)}`), URL_TIMEOUT_MS);
+      if (!state.song || state.song.songmid !== songKey) return; // 切歌竞态保护
+      if (seq !== undefined && seq !== playSeq) return;          // 双保险:过期响应丢弃
+      break;   // 收到业务响应(含暂无歌词):不再重试
+    } catch (e) {
+      r = null;
+      if (!state.song || state.song.songmid !== songKey) return;
+      if (seq !== undefined && seq !== playSeq) return;
+      if (attempt < URL_MAX_RETRY) toast(`歌词加载超时，自动重试 ${attempt}/${URL_MAX_RETRY - 1}`, 'warn', 1500);
+    }
+  }
+  if (!r) {   // 三次全败:提示网络差
+    if (state.song && state.song.songmid === songKey) toast('当前网络环境较差，歌词暂时无法加载', 'error', 3000);
+    return;
+  }
   try {
-    const r = await api(`/api/lyric?songmid=${songKey}`);
-    if (!state.song || state.song.songmid !== songKey) return; // 切歌竞态保护
-    if (seq !== undefined && seq !== playSeq) return;          // 双保险:过期响应丢弃
     if (r.code !== 200 || !r.data || !r.data.lyric) {
       toast('这首歌暂无歌词', 'info', 2500);
       return;

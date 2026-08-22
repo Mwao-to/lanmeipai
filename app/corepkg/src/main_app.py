@@ -2088,7 +2088,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     --glass-alpha: .55;
     --glass-border: rgba(255,255,255,.09);
     --hi-top: inset 0 1px 0 rgba(255,255,255,.10);       /* 玻璃顶部高光(拟物) */
-    --bgcover-blur: 48px;      /* 全局封面背景模糊:单层渲染,GPU 缓存一次 */
+    --bgcover-blur: 10px;      /* 全局封面背景模糊:原48px的20%,封面更清晰 */
     /* ---- 动效令牌(按压 100-160ms / UI ≤300ms) ---- */
     --spring: cubic-bezier(.34,1.56,.64,1);     /* 弹性按压回弹 bounce≈0.25 */
     --ease-out: cubic-bezier(.23,1,.32,1);      /* 强 ease-out:进出场 */
