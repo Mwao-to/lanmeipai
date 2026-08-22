@@ -2002,6 +2002,12 @@ def start():
     print('蓝莓派 App 内嵌服务启动: http://127.0.0.1:5000')
     app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
 
+
+def get_html():
+    """供 Java 层在 Flask 绑定端口前调用:提前把界面 HTML 渲染进 WebView,
+    消除「启动白屏等待」;后端未就绪期间由前端 bootLoop 自动重试补载数据。"""
+    return EMBEDDED_HTML
+
 # ════════ 内嵌界面 index.html ════════
 EMBEDDED_HTML = r'''<!DOCTYPE html>
 <html lang="zh-CN">
@@ -2252,6 +2258,17 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .modal-btn:hover { background:rgba(74,74,74,var(--glass-alpha)); box-shadow:0 4px 14px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.18); }
   .modal-btn:active { transform:translateY(1px); }
 
+  /* ============ 启动引导浮层:后端未就绪时显示,首个接口成功即自动消失 ============ */
+  #bootTip {
+    position:fixed; left:50%; top:16%; transform:translateX(-50%); z-index:1200;
+    padding:7px 16px; border-radius:14px; pointer-events:none;
+    background:rgba(37,37,38,.85); border:1px solid var(--accent);
+    color:var(--accent-hover); font-family:var(--mono); font-size:12px;
+    box-shadow:0 4px 18px rgba(0,0,0,.5);
+    animation:bootPulse 1.2s ease-in-out infinite;
+  }
+  @keyframes bootPulse { 0%,100%{opacity:.55} 50%{opacity:1} }
+
   /* ============ Toast 通知(VS Code 风格) ============ */
   #toasts { position:fixed; right:16px; bottom:105px; z-index:999; display:flex; flex-direction:column; gap:8px; width:320px; max-width:80vw; }
   .toast {
@@ -2457,13 +2474,15 @@ const ICON_PAUSE = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V
 async function loadHotSongs() {
   try {
     const r = await api(`/api/songlist?id=${HOT_LIST_ID}&limit=15`);
-    if (r.code !== 200 || !r.data.list || !r.data.list.length) { $('hotList').innerHTML = '<span class="loading">热门歌曲加载失败</span>'; return; }
+    if (r.code !== 200 || !r.data.list || !r.data.list.length) throw new Error(r.message || 'empty');
     hotSongs = r.data.list;
     $('hotList').innerHTML = hotSongs.map((s, i) =>
       `<button type="button" class="chip" title="${esc(s.name)} - ${esc(s.singer)}" onclick="playHot(${i})">
          <span class="n">${i + 1}</span>${esc(s.name)}</button>`).join('');
+    return true;                       // 供启动引导判断后端是否就绪
   } catch (e) {
     $('hotList').innerHTML = '<span class="loading">热门歌曲加载失败</span>';
+    return false;
   }
 }
 function playHot(i) {
@@ -2474,7 +2493,27 @@ function playHot(i) {
   play(i, hotSongs);          // 先播放
   silentSearch(song.name);    // 再自动搜索同名歌名填充结果面板
 }
-loadHotSongs();
+
+/* ============ 启动引导:界面先行渲染,后端未就绪时自动重试 + 轻浮层提示 ============
+ * App 内 WebView 会先于 Flask 绑定端口拿到本页(baseURL 指向 127.0.0.1:5000),
+ * 此时所有 fetch 都会失败:首次失败才显示「服务启动中…」浮层(避免正常启动闪现),
+ * 每 500ms 自动重试拉取热门歌曲,成功或收到 Java 层 onServerReady 回调即隐藏。 */
+let bootTries = 0, bootDone = false;
+const bootTip = document.createElement('div');
+bootTip.id = 'bootTip'; bootTip.style.display = 'none';
+bootTip.textContent = '⏳ 服务启动中…';
+document.body.appendChild(bootTip);
+function hideBootTip() { if (!bootDone) { bootDone = true; bootTip.remove(); } }
+async function bootLoop() {
+  if (await loadHotSongs()) { hideBootTip(); return; }
+  if (++bootTries === 1) bootTip.style.display = 'block';
+  if (bootTries < 60) setTimeout(bootLoop, 500);   // 最多重试约 30 秒
+}
+bootLoop();
+window.onServerReady = async () => {   // Java 层探测到本地端口就绪时立即刷新
+  if (bootDone) return;
+  if (await loadHotSongs()) hideBootTip();
+};
 
 /* ============ 搜索结果面板(独立渲染,翻页/搜索只动这里) ============ */
 
