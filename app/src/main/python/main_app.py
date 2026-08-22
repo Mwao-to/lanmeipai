@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations   # 必须:让 str|None 等注解延迟求值,兼容 Chaquopy 默认 Python 3.8
 """蓝莓派单文件版:全部后端逻辑 + 内嵌 HTML 界面(供 Chaquopy 打包,零文件系统依赖)"""
 
 # ════════ wyapi/log.py ════════
