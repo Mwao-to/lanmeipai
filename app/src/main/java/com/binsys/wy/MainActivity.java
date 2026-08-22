@@ -54,6 +54,9 @@ public class MainActivity extends Activity {
         st.setAllowFileAccess(true);
         st.setMediaPlaybackRequiresUserGesture(false);
         st.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        // 完全隐藏内嵌浏览器的滚动条(横向/纵向都不再显示)
+        web.setVerticalScrollBarEnabled(false);
+        web.setHorizontalScrollBarEnabled(false);
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageStarted(WebView view, java.lang.String url, android.graphics.Bitmap f) {
                 Dbg.w(self, "WebView onPageStarted: " + url);
@@ -85,7 +88,13 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             Dbg.w(self, "[py] 线程启动,准备初始化 Python…");
             try {
-                Python.start(new AndroidPlatform(self));   // ← 缺了这步导致的崩溃
+                try {
+                    Python.start(new AndroidPlatform(self));   // ← 缺了这步导致的崩溃
+                } catch (Throwable dup) {
+                    // 同一进程内二次进入(退出后进程未及时回收又重启):
+                    // Python 已初始化过会抛异常,忽略并复用现有实例即可
+                    Dbg.w(self, "[py] Python 已初始化(进程复用): " + dup.getMessage());
+                }
                 PyObject mainApp = Python.getInstance().getModule("main_app");
                 Dbg.w(self, "[py] Python 已初始化,模块已加载");
                 String html = mainApp.callAttr("get_html").toString();
@@ -97,6 +106,8 @@ public class MainActivity extends Activity {
                     web.loadDataWithBaseURL(PAGE, html, "text/html", "utf-8", null);
                     Dbg.w(self, "[ui] 界面已提前渲染(" + htmlLen + " 字节),后端继续启动");
                 });
+                // 若旧实例仍占用 5000 端口,这里抛 EADDRINUSE —— 不影响界面,
+                // 轮询线程会直接连上旧服务继续用
                 mainApp.callAttr("start");   // 阻塞直到服务停止
                 Dbg.w(self, "[py] start() 已返回(Flask 服务退出)");
             } catch (Throwable t) {
@@ -171,6 +182,18 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (web != null && web.canGoBack()) web.goBack();
-        else super.onBackPressed();
+        else finish();   // 触发 onDestroy → 彻底杀进程,不留后台残留
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // 用户真正退出(非旋转屏幕等配置变更)时杀掉整个进程:
+        // 确保 Flask 线程、5000 端口监听、Python 运行时全部释放,
+        // 下次启动永远是干净冷启,不会出现重进白屏
+        if (isFinishing()) {
+            Dbg.w(this, "用户已退出,杀掉进程以彻底关闭后台服务(端口 5000)");
+            android.os.Process.killProcess(android.os.Process.myPid());
+        }
     }
 }
