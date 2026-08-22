@@ -15,6 +15,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import com.chaquo.python.AndroidPlatform;
 import com.chaquo.python.Python;
 
 import java.io.IOException;
@@ -79,6 +80,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             Dbg.w(self, "[py] 线程启动,准备初始化 Python…");
             try {
+                Python.start(new AndroidPlatform(self));   // ← 缺了这步导致的崩溃
                 Python py = Python.getInstance();
                 Dbg.w(self, "[py] Python 已初始化");
                 py.getModule("main_app").callAttr("start");   // 阻塞直到服务停止
