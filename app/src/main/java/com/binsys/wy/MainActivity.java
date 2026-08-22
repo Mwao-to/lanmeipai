@@ -10,6 +10,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -74,8 +76,12 @@ public class MainActivity extends Activity {
         new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "网易云下载器");
 
     private WebView web;
-    /** JS→Python 桥的调用线程池(每次 API 调用一个任务,互不阻塞) */
-    private final ExecutorService apiPool = Executors.newCachedThreadPool();
+    /** JS→Python 桥的调用线程池(有界 4 线程:CPython GIL 下更高并发无益,且防请求风暴) */
+    private final ExecutorService apiPool = Executors.newFixedThreadPool(4,
+        r -> new Thread(r, "api-worker"));
+    /** 下载专用队列(并发 ≤2:第 3 个任务起排队,防多任务时 12线程/任务 的连接与 fd 风暴) */
+    private final ExecutorService dlPool = Executors.newFixedThreadPool(2,
+        r -> new Thread(r, "dl-worker"));
     /** <Q 设备申请存储权限期间暂存的歌词内容 {name, content} */
     private final String[] pendingText = new String[2];
     /** 系统下载器兜底:任务 id → 文件名(完成后广播里查路径用) */
@@ -251,6 +257,24 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * 断网短路探测(P1):仅要求存在具备 INTERNET 能力的活动网络,
+     * 不苛求 VALIDATED(captive portal 校验中不误判)。
+     * 判定异常时返回 true —— 宁可多试一次,不可误判断网。
+     */
+    private static boolean isOnline(Context c) {
+        try {
+            ConnectivityManager cm = (ConnectivityManager)
+                c.getSystemService(Context.CONNECTIVITY_SERVICE);
+            android.net.Network n = cm == null ? null : cm.getActiveNetwork();
+            if (n == null) return false;
+            NetworkCapabilities cap = cm.getNetworkCapabilities(n);
+            return cap != null && cap.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    /**
      * JS ↔ Python 桥:页面经 window.AndroidBridge 直达 Python,
      * 全程无 HTTP、无端口。request 立即返回,耗时工作在线程池执行,
      * 完成后回调页面的 __onApiResult(id, status, body)。
@@ -262,11 +286,21 @@ public class MainActivity extends Activity {
             apiPool.execute(() -> {
                 String payload;
                 try {
-                    // ═══ 排队等待 Python 就绪(冷启动竞态根除):最多等 15 秒 ═══
-                    for (int i = 0; !PY_READY && i < 150; i++) Thread.sleep(100);
-                    if (!PY_READY) throw new IllegalStateException("服务初始化超时");
-                    payload = Python.getInstance().getModule("main_app")
-                        .callAttr("handle_api", path).toString();
+                    // ═══ 断网短路(P1):无活动网络立即返回业务级错误,不烧 Python 重试链 ═══
+                    if (!isOnline(self)) {
+                        payload = new JSONObject()
+                            .put("status", 200)
+                            .put("body", new JSONObject()
+                                .put("code", -1)
+                                .put("message", "网络未连接，请检查网络后重试").toString())
+                            .toString();
+                    } else {
+                        // ═══ 排队等待 Python 就绪(冷启动竞态根除):最多等 15 秒 ═══
+                        for (int i = 0; !PY_READY && i < 150; i++) Thread.sleep(100);
+                        if (!PY_READY) throw new IllegalStateException("服务初始化超时");
+                        payload = Python.getInstance().getModule("main_app")
+                            .callAttr("handle_api", path).toString();
+                    }
                 } catch (Throwable t) {
                     // 真正的异常(非就绪等待)才落盘;排队超时返回业务级错误由前端重试
                     if (!(t instanceof IllegalStateException))
@@ -487,10 +521,16 @@ public class MainActivity extends Activity {
             "完整性校验失败(已下载 " + done.get() + "/" + total + " 字节)");
     }
 
-    /** 统一下载入口:创建目标文件 → 探测 Range → 12 线程/单线程 → 发布并回传保存路径。 */
+    /** 统一下载入口:创建目标文件 → 探测 Range → 12 线程/单线程 → 发布并回传保存路径。
+     *  跑在 dlPool(并发≤2 队列):第 3 个起排队,防止连接/fd 风暴。 */
     private void internalDownload(String filename, String url) {
         final Context self = getApplicationContext();
-        apiPool.execute(() -> {
+        dlPool.execute(() -> {
+            // ═══ 断网短路(P1):未联网直接报错,不建文件、不转系统下载器空挂 ═══
+            if (!isOnline(self)) {
+                dlEvent("error", filename, "网络未连接，请检查网络后重试");
+                return;
+            }
             Uri mediaUri = null;
             File legacy = null;
             AtomicLong done = new AtomicLong();

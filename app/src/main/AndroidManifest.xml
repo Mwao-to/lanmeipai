@@ -3,6 +3,8 @@
 
     <!-- 网络权限:访问网易云接口 + 本地回环服务 -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 网络状态:断网短路(P1,飞行模式立即报错不空烧重试) -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <!-- 旧版安卓下载写入公共目录(DownloadManager 在 API 29+ 无需该权限) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
 

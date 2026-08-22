@@ -801,9 +801,10 @@ def _get_ip() :
         if _ip_cache['ip'] and time.time() - _ip_cache['ts'] < 300:
             return _ip_cache['ip']
     try:
+        # timeout=6:P0 时钟对齐 —— 取链全链路最坏耗时必须 < 前端桥接 60s 上限
         r = requests.post(f'{BASE}/api/ip',
                           json={'timestamp': int(time.time() * 1000)},
-                          headers={'User-Agent': UA}, timeout=10)
+                          headers={'User-Agent': UA}, timeout=6)
         ip = r.json()['data']['ip']
         with _lock:
             _ip_cache['ip'] = ip
@@ -827,12 +828,14 @@ def _post(path, payload) :
             'Referer': REFERER,
             'Origin': 'https://wyapi.toubiec.cn',
         },
-        timeout=20,
+        # timeout=6(P0):原 20s × 多次重试会突破前端 60s 桥接超时产生孤儿请求;
+        # 收紧后整条第三方链路(含降级档)最坏 ≈33s,加官方段总最坏 ≈55s,留足余量
+        timeout=6,
     )
     return resp.json()
 
 
-def get_song_url(song_id, quality = '320k', max_retry = 2) :
+def get_song_url(song_id, quality = '320k', max_retry = 1) :
     """第三方获取播放直链。失败抛 RuntimeError。
 
     策略:
@@ -855,7 +858,7 @@ def get_song_url(song_id, quality = '320k', max_retry = 2) :
                 d = data.get('data') or {}
                 wait = float(d.get('retryAfter') or 5)
                 last_err = RuntimeError(data.get('message') or f'请求频率过快,{int(wait)}秒后重试')
-                time.sleep(min(wait, 15))
+                time.sleep(min(wait, 6))   # P0:限流等待封顶 6s,防时钟膨胀
                 continue
             if data.get('code') == 404:
                 last_err = RuntimeError(data.get('message') or '未找到(可能限流或账号无权限)')
@@ -1346,7 +1349,9 @@ class WYSource(MusicSource):
                 'encodeType': encode_type,
                 'csrf_token': csrf.group(1) if csrf else '',
             }),
-            retry=3,
+            # P0 时钟对齐:官方段最坏 8s×2+退避≈16.5s,与第三方段相加仍 < 前端桥 60s
+            timeout=8,
+            retry=2,
         )
         body = resp['body']
         if resp['status_code'] != 200 or not isinstance(body, dict) or body.get('code') != 200:
