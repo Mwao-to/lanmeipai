@@ -1977,6 +1977,22 @@ def api_songlist():
     return jsonify({'code': 200, 'data': res})
 
 
+@app.get('/api/songdetail')
+def api_song_detail():
+    """按单曲 ID 官方解析歌曲详情(搜索框单曲链接直连),结构与搜索结果一致"""
+    songmid = (request.args.get('songmid') or '').strip()
+    if not songmid.isdigit():
+        return jsonify({'code': 400, 'message': '缺少 songmid 参数'})
+    try:
+        lst = wy._get_song_details([songmid])
+    except Exception as e:
+        return jsonify({'code': 500, 'message': str(e)})
+    if not lst:
+        return jsonify({'code': 404, 'message': '未找到该歌曲'})
+    _cache_songs(lst)
+    return jsonify({'code': 200, 'data': {'list': lst}})
+
+
 @app.post('/api/cookie')
 def api_set_cookie():
     """设置网易云 Cookie(如 MUSIC_U=xxx),可选"""
@@ -2067,7 +2083,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     --glass-alpha: .5;           /* 面板/控件背景不透明度 50% */
     --bgcover-blur: 48px;        /* 全局封面背景模糊强度(约70%档):单层渲染,GPU 缓存一次 */
   }
-  * { box-sizing:border-box; margin:0; padding:0; }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; outline:none; }
   body {
     background:var(--bg); color:var(--text);
     font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
@@ -2182,7 +2198,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .meta { color:var(--muted); font-size:9.5px; margin-bottom:5px; font-family:var(--mono); }
   .song { display:flex; align-items:center; gap:6px; padding:7px 6px; border-radius:3px; cursor:pointer; border-left:2px solid transparent; transition:background .1s; }
   .song:hover { background:var(--bg-hover); }
-  .song.playing { background:var(--bg-active); border-left-color:rgba(255,255,255,.55); }
+  .song.playing { background:linear-gradient(90deg, rgba(194,12,12,.23), transparent); border-left-color:var(--accent); }
   .song.playing .name { color:var(--text-bright); }
   .song .idx { width:13px; min-width:13px; text-align:center; color:var(--muted); font-size:10px; flex-shrink:0; font-family:var(--mono); }
   .song.playing .idx { color:#fff; opacity:.92; }
@@ -2396,7 +2412,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
       </div>
     </div>
     <div class="col">
-      <h3 class="panel-title">列表 PLAYLIST <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button></span></h3>
+      <h3 class="panel-title">列表 PLAYLIST <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button><button id="srcToggle" type="button" title="切换 歌单/单曲 数据" style="display:none">♫</button></span></h3>
       <div class="panel" id="resultPanel">
         <div class="empty" id="resultEmpty">ᕙ(  •̀ ᗜ •́  )ᕗ</div>
         <div id="resultBody"></div>
@@ -2816,53 +2832,137 @@ async function autoFill(minCount) {
   }
 }
 
-/* ══════════ 歌单直搜：检测歌单链接/纯数字ID，调官方接口解析后整包载入结果列表 ══════════
- * 支持：① PC端 https://music.163.com/#/playlist?id=xxx
- *       ② 手机端 https://y.music.163.com/m/playlist?id=xxx
- *       ③ 分享路径式 /playlist/xxx/...
- *       ④ 纯数字歌单ID(≥6位，解析失败自动回退普通搜索) */
-function parsePlaylistId(kw) {
-  const m = kw.match(/playlist\?id=(\d+)/i) || kw.match(/\/playlist\/(\d+)/);
-  if (m) return { id: m[1], fromUrl: true };
+/* ══════════ 链接直搜：识别歌单/单曲/歧义残链，官方接口解析后整包装入列表 ══════════
+ * 支持：① 歌单 PC/手机端 playlist?id=N、/playlist/N 路径
+ *       ② 单曲 song?id=N(PC/手机端)、/song/N 路径
+ *       ③ 纯数字 ≥6 位：默认按歌单解析(失败自动回退普通搜索)
+ *       ④ 残缺链接兜底：含 id=数字 但无法区分歌单/单曲 → 双解析,标题栏 ♫ 切换 */
+function parseMusicLink(kw) {
   const t = kw.trim();
-  if (/^\d{6,}$/.test(t)) return { id: t, fromUrl: false };
-  // 兑底：残缺链接(如 y.musc.163.com/m/?id=N，缺 playlist 路径/域名拼错)只要含 id=数字 就强行提取
+  let m;
+  if ((m = t.match(/song\?id=(\d+)/i)) || (m = t.match(/\/song\/(\d+)/)))
+    return { type: 'song', id: m[1] };
+  if ((m = t.match(/playlist\?id=(\d+)/i)) || (m = t.match(/\/playlist\/(\d+)/)))
+    return { type: 'playlist', id: m[1] };
+  if (/^\d{6,}$/.test(t)) return { type: 'playlist', id: t };
   const f = t.match(/[?&]id=(\d+)/i);
-  if (f && f[1].length >= 5) return { id: f[1], fromUrl: true };
+  if (f && f[1].length >= 5) return { type: 'both', id: f[1] };
   return null;
 }
 
 async function loadPlaylist(pid, fromUrl, seq) {
   $('resultEmpty').style.display = 'none';
   $('resultBody').innerHTML = '<div class="loading">歌单解析中</div>';
-  state.kw = '';   // 一次性载入：清空关键词即可禁用下滑分页/自动补齐(loadMore/autoFill 均有 !state.kw 保护)
+  state.kw = '';   // 一次性载入:清空关键词即可禁用下滑分页/自动补齐(loadMore/autoFill 均有 !state.kw 保护)
   try {
     const r = await api(`/api/songlist?id=${encodeURIComponent(pid)}&limit=500`);
-    if (seq !== searchSeq) return;
+    if (seq !== searchSeq) return null;
     if (r.code !== 200 || !(r.data && r.data.list && r.data.list.length)) {
-      if (!fromUrl) { await runSearch(pid, 1, false, true); return; }   // 纯数字不是有效歌单：回退普通搜索
+      if (!fromUrl) { await runSearch(pid, 1, false, true); return null; }   // 纯数字不是有效歌单:回退普通搜索
       const msg = r.message || '歌单解析失败';
       $('resultBody').innerHTML = `<div class="err">${esc(msg)}</div>`;
       toast(msg, 'error');
-      return;
+      return null;
     }
     const d = r.data, info = d.info || {};
-    state.list = d.list;
-    state.total = d.list.length;
-    state.allPage = 0; state.page = 1;
-    renderResults();
-    const meta = document.querySelector('#resultBody .meta');
-    if (meta) meta.textContent =
-      `// ♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${d.list.length} 首${info.play_count ? ' · ' + info.play_count : ''}`;
-    autoFill(PC_INIT_TARGET);
+    applyListData(d.list,
+      `♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${d.list.length} 首${info.play_count ? ' · ' + info.play_count : ''}`);
     toast(`歌单「${info.name || pid}」已加载 ${d.list.length} 首`, 'success', 2500);
+    return { list: d.list, meta: `♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${d.list.length} 首` };
   } catch (e) {
-    if (seq !== searchSeq) return;
-    if (!fromUrl) { await runSearch(pid, 1, false, true); return; }
+    if (seq !== searchSeq) return null;
+    if (!fromUrl) { await runSearch(pid, 1, false, true); return null; }
     $('resultBody').innerHTML = '<div class="err">歌单请求失败</div>';
     toast('歌单请求失败', 'error');
+    return null;
   }
 }
+
+/* 整包套用一组歌曲数据到结果列表(歌单/单曲/双解析切换共用) */
+function applyListData(list, metaText) {
+  state.list = list;
+  state.total = list.length;
+  state.allPage = 0; state.page = 1;
+  renderResults();
+  const meta = document.querySelector('#resultBody .meta');
+  if (meta && metaText) meta.textContent = '// ' + metaText;
+  autoFill(PC_INIT_TARGET);
+}
+
+/* 单曲链接官方解析:songmid → 歌曲详情整包。collectOnly=true 时只取数不渲染(双解析用) */
+async function loadSingleSong(sid, seq, collectOnly) {
+  $('resultEmpty').style.display = 'none';
+  if (!collectOnly) {
+    $('resultBody').innerHTML = '<div class="loading">歌曲解析中</div>';
+    state.kw = '';
+  }
+  try {
+    const r = await api(`/api/songdetail?songmid=${encodeURIComponent(sid)}`);
+    if (seq !== searchSeq) return null;
+    if (r.code !== 200 || !(r.data && r.data.list && r.data.list.length)) {
+      if (!collectOnly) {
+        const msg = r.message || '歌曲解析失败';
+        $('resultBody').innerHTML = `<div class="err">${esc(msg)}</div>`;
+        toast(msg, 'error');
+      }
+      return null;
+    }
+    const list = r.data.list, s0 = list[0];
+    if (collectOnly) return list;
+    applyListData(list, `♪ ${s0.name} · ${s0.singer} · 单曲解析`);
+    toast(`已加载单曲「${s0.name}」`, 'success', 2000);
+    return list;
+  } catch (e) {
+    if (seq !== searchSeq) return null;
+    if (!collectOnly) {
+      $('resultBody').innerHTML = '<div class="err">歌曲请求失败</div>';
+      toast('歌曲请求失败', 'error');
+    }
+    return null;
+  }
+}
+
+/* ═══ 歧义残链双解析:歌单优先展示,单曲后台就绪后点亮 ♫ 切换标签 ═══ */
+let dualSets = null;   // { pl:[...], plMeta:'', song:[...], showing:'pl'|'song' }
+function setSwitchTab(active) {
+  const b = $('srcToggle');
+  b.style.display = dualSets ? '' : 'none';
+  b.style.color = active ? 'var(--accent)' : 'var(--muted)';
+  b.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+}
+async function loadDualFallback(id, seq) {
+  dualSets = null; setSwitchTab(false);
+  $('resultEmpty').style.display = 'none';
+  $('resultBody').innerHTML = '<div class="loading">链接不完整，歌单+单曲同时解析中</div>';
+  state.kw = '';
+  const songP = loadSingleSong(id, seq, true);          // 并发:单曲只收集
+  const plRes = await loadPlaylist(id, true, seq);      // 歌单优先展示
+  if (seq !== searchSeq) return;
+  const songList = await songP;
+  if (plRes && songList) {
+    dualSets = { pl: plRes.list, plMeta: plRes.meta, song: songList, showing: 'pl' };
+    setSwitchTab(false);   // 显示按钮(默认态配色)
+    toast('链接不完整:已同时解析出歌单与单曲，点标题栏右侧 ♫ 切换', 'info', 3500);
+  } else if (!plRes && songList) {
+    applyListData(songList, `♪ ${songList[0].name} · ${songList[0].singer} · 单曲解析`);
+    toast(`已加载单曲「${songList[0].name}」`, 'success', 2000);
+  }
+}
+$('srcToggle').addEventListener('click', () => {
+  if (!dualSets || !dualSets.song || !dualSets.pl) return;
+  if (dualSets.showing === 'pl') {
+    dualSets.showing = 'song';
+    const s0 = dualSets.song[0];
+    applyListData(dualSets.song, `♪ ${s0.name} · ${s0.singer} · 单曲解析`);
+    setSwitchTab(true);
+    toast('已切换为单曲数据', 'success', 1500);
+  } else {
+    dualSets.showing = 'pl';
+    applyListData(dualSets.pl, dualSets.plMeta);
+    setSwitchTab(false);
+    toast('已切回歌单数据', 'success', 1500);
+  }
+})
 
 async function doSearch() {
   const kw = $('kw').value.trim();
@@ -2879,8 +2979,14 @@ async function silentSearch(kw) {
 async function runSearch(kw, p, toastOn, noPlaylist) {
   const seq = ++searchSeq;   // 新搜索开始：作废所有在途旧搜索/旧预取响应
   if (p === 1 && !noPlaylist) {
-    const pl = parsePlaylistId(kw);
-    if (pl) { state.page = 1; await loadPlaylist(pl.id, pl.fromUrl, seq); return; }
+    dualSets = null; setSwitchTab(false);          // 新搜索开始:重置双解析状态与切换标签
+    const ml = parseMusicLink(kw);
+    if (ml) {
+      state.page = 1;
+      if (ml.type === 'song') { await loadSingleSong(ml.id, seq); return; }
+      if (ml.type === 'playlist') { await loadPlaylist(ml.id, true, seq); return; }
+      await loadDualFallback(ml.id, seq); return;   // 残缺无法区分:歌单+单曲双解析
+    }
   }
   // 只刷新搜索结果面板
   state.kw = kw;             // 记住关键词,供下滑自动加载使用
