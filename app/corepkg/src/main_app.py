@@ -2385,7 +2385,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   </header>
 
   <div class="search-bar">
-    <input id="kw" autocomplete="off" enterkeyhint="search" placeholder="搜索歌曲 / 歌手 / 专辑…" onkeydown="if(event.key==='Enter')doSearch(1)">
+    <input id="kw" autocomplete="off" enterkeyhint="search" placeholder="搜索歌曲/歌手/专辑 或粘贴歌单链接/ID" onkeydown="if(event.key==='Enter')doSearch(1)">
     <button class="btn" onclick="doSearch(1)">搜索</button>
   </div>
 
@@ -2830,6 +2830,51 @@ async function autoFill(minCount) {
   }
 }
 
+/* ══════════ 歌单直搜：检测歌单链接/纯数字ID，调官方接口解析后整包载入结果列表 ══════════
+ * 支持：① PC端 https://music.163.com/#/playlist?id=xxx
+ *       ② 手机端 https://y.music.163.com/m/playlist?id=xxx
+ *       ③ 分享路径式 /playlist/xxx/...
+ *       ④ 纯数字歌单ID(≥6位，解析失败自动回退普通搜索) */
+function parsePlaylistId(kw) {
+  const m = kw.match(/playlist\?id=(\d+)/i) || kw.match(/\/playlist\/(\d+)/);
+  if (m) return { id: m[1], fromUrl: true };
+  const t = kw.trim();
+  if (/^\d{6,}$/.test(t)) return { id: t, fromUrl: false };
+  return null;
+}
+
+async function loadPlaylist(pid, fromUrl, seq) {
+  $('resultEmpty').style.display = 'none';
+  $('resultBody').innerHTML = '<div class="loading">歌单解析中</div>';
+  state.kw = '';   // 一次性载入：清空关键词即可禁用下滑分页/自动补齐(loadMore/autoFill 均有 !state.kw 保护)
+  try {
+    const r = await api(`/api/songlist?id=${encodeURIComponent(pid)}&limit=500`);
+    if (seq !== searchSeq) return;
+    if (r.code !== 200 || !(r.data && r.data.list && r.data.list.length)) {
+      if (!fromUrl) { await runSearch(pid, 1, false, true); return; }   // 纯数字不是有效歌单：回退普通搜索
+      const msg = r.message || '歌单解析失败';
+      $('resultBody').innerHTML = `<div class="err">${esc(msg)}</div>`;
+      toast(msg, 'error');
+      return;
+    }
+    const d = r.data, info = d.info || {};
+    state.list = d.list;
+    state.total = d.list.length;
+    state.allPage = 0; state.page = 1;
+    renderResults();
+    const meta = document.querySelector('#resultBody .meta');
+    if (meta) meta.textContent =
+      `// ♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${d.list.length} 首${info.play_count ? ' · ' + info.play_count : ''}`;
+    autoFill(PC_INIT_TARGET);
+    toast(`歌单「${info.name || pid}」已加载 ${d.list.length} 首`, 'success', 2500);
+  } catch (e) {
+    if (seq !== searchSeq) return;
+    if (!fromUrl) { await runSearch(pid, 1, false, true); return; }
+    $('resultBody').innerHTML = '<div class="err">歌单请求失败</div>';
+    toast('歌单请求失败', 'error');
+  }
+}
+
 async function doSearch() {
   const kw = $('kw').value.trim();
   if (!kw) return;
@@ -2842,8 +2887,12 @@ async function silentSearch(kw) {
   await runSearch(kw, 1, false);
 }
 
-async function runSearch(kw, p, toastOn) {
-  const seq = ++searchSeq;   // 新搜索开始:作废所有在途旧搜索/旧预取响应
+async function runSearch(kw, p, toastOn, noPlaylist) {
+  const seq = ++searchSeq;   // 新搜索开始：作废所有在途旧搜索/旧预取响应
+  if (p === 1 && !noPlaylist) {
+    const pl = parsePlaylistId(kw);
+    if (pl) { state.page = 1; await loadPlaylist(pl.id, pl.fromUrl, seq); return; }
+  }
   // 只刷新搜索结果面板
   state.kw = kw;             // 记住关键词,供下滑自动加载使用
   $('resultEmpty').style.display = 'none';
