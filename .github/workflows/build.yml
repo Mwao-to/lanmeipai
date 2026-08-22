@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 允许 GITHUB_TOKEN 创建 Release 并上传 APK
     steps:
       - uses: actions/checkout@v4
 
