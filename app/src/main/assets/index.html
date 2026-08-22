@@ -134,7 +134,8 @@
   .chip .n { color:var(--accent-hover); margin-right:3px; font-family:var(--mono); font-size:10px; }
 
   /* ============ 双栏布局 ============ */
-  .dash { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; align-items:start; }
+  /* 权重 1:1:两栏等宽(1fr 1fr)+ 等高(stretch),左右列表高度永远一致 */
+  .dash { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; align-items:stretch; }
   .panel {
     background:var(--glass-regular); border:1px solid var(--glass-border); border-radius:var(--r-md);
     padding:8px; min-height:200px; max-height:64vh; overflow-y:auto;
@@ -144,8 +145,10 @@
   }
   .panel::-webkit-scrollbar { width:0; height:0; display:none; }
   .dash > .col { display:flex; flex-direction:column; min-width:0; }
+  /* 列表权重 1:1:两栏面板均分本列剩余高度,内容多寡不影响一致性 */
+  .col > .panel { flex:1 1 auto; }
   .panel-title {
-    font-size:10.5px; color:var(--muted); font-family:var(--mono); letter-spacing:1px;
+    font-size:5.5px; color:var(--muted); font-family:var(--mono); letter-spacing:.5px;
     margin-bottom:6px; display:flex; align-items:center; gap:6px;
     background:var(--glass-thin); padding:5px 10px;
     border:1px solid var(--glass-border); border-radius:var(--r-md);

@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 30
-        versionName '3.17'   // P0+P1 网络层加固:取链时钟对齐(永不超桥60s)+下载队列化(并发≤2)+断网短路
+        versionCode 31
+        versionName '3.18'   // 双栏权重1:1等高+标题文字缩小一半+输入法与背景尺寸零关联(adjustNothing)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

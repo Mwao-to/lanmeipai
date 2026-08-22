@@ -91,9 +91,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Dbg.w(this, "═══ onCreate 进入 ═══");
-        // 禁止搜索框在启动/渲染后自动拉起输入法(用户点击输入框时才弹键盘)
+        // 输入法零关联:ADJUST_NOTHING 让键盘弹出时窗口不平移不缩放,
+        // 背景封面/双栏布局尺寸与输入法彻底解耦;STATE_ALWAYS_HIDDEN 防启动即弹键盘
         getWindow().setSoftInputMode(
-            android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
+            android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+            | android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
         // 全局未捕获异常也落盘(定位闪退)
         final Context self = this;
         Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
