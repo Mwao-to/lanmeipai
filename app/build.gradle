@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 10
-        versionName '1.7.0'   // 架构升级:无端口运行(JS↔Python 桥直连),不再监听 127.0.0.1:5000
+        versionCode 11
+        versionName '1.7.1'   // 极速启动:界面从 assets 毫秒级渲染(构建期自动同步),返回键直接退出
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
@@ -44,3 +44,18 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
+// ═══ 构建期同步:把 main_app.py 中的内嵌界面提取为 assets/index.html ═══
+// 单一数据源仍是 main_app.py,assets 只是构建产物:
+// App 端零 Python 依赖即时渲染界面,同时保持服务器模式(/ 路由)共用同一份 HTML
+tasks.register('syncEmbeddedHtml') {
+    doLast {
+        def py = file('src/main/python/main_app.py').text
+        def m = (py =~ /(?s)EMBEDDED_HTML = r'''(.*)'''/)
+        if (!m.find()) throw new GradleException('EMBEDDED_HTML 未找到,无法生成 assets/index.html')
+        file('src/main/assets').mkdirs()
+        file('src/main/assets/index.html').text = m.group(1)
+        println "✓ assets/index.html 已同步 (${m.group(1).length()} 字符)"
+    }
+}
+preBuild.dependsOn 'syncEmbeddedHtml'

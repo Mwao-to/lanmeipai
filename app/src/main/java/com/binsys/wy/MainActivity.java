@@ -21,14 +21,15 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
-import com.chaquo.python.PyObject;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -44,7 +45,6 @@ public class MainActivity extends Activity {
     private static final int REQ_WRITE = 42;
 
     private WebView web;
-    private boolean pageLoaded = false;
     /** JS→Python 桥的调用线程池(每次 API 调用一个任务,互不阻塞) */
     private final ExecutorService apiPool = Executors.newCachedThreadPool();
     /** <Q 设备申请存储权限期间暂存的歌词内容 {name, content} */
@@ -62,6 +62,9 @@ public class MainActivity extends Activity {
             android.os.Process.killProcess(android.os.Process.myPid());
         });
 
+        // 第一件事:后台并行初始化 Python(与界面渲染同时进行,谁也不等谁)
+        startPythonInit();
+
         setContentView(R.layout.activity_main);
         web = findViewById(R.id.web);
 
@@ -77,10 +80,10 @@ public class MainActivity extends Activity {
         // JS↔Python 桥(无端口架构核心):页面所有 API 经此直连 Python
         web.addJavascriptInterface(new ApiBridge(), "AndroidBridge");
         web.setWebViewClient(new WebViewClient() {
-            @Override public void onPageStarted(WebView view, java.lang.String url, android.graphics.Bitmap f) {
+            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap f) {
                 Dbg.w(self, "WebView onPageStarted: " + url);
             }
-            @Override public void onPageFinished(WebView view, java.lang.String url) {
+            @Override public void onPageFinished(WebView view, String url) {
                 Dbg.w(self, "WebView onPageFinished: " + url);
             }
             @Override public void onReceivedError(WebView view, WebResourceRequest rq, WebResourceError er) {
@@ -89,26 +92,25 @@ public class MainActivity extends Activity {
         });
         web.setDownloadListener(this::onDownload);
 
-        // 启动画面:立即可见,用于区分「WebView 层」与「Python 层」故障
-        web.loadData("<html><body style='background:#1e1e20;display:flex;align-items:center;"
-            + "justify-content:center;height:90vh'><p style='color:#8ab4f8;font-family:sans-serif;"
-            + "font-size:18px'>蓝莓派启动中…</p></body></html>", "text/html", "utf-8");
-        Dbg.w(this, "启动画面已设置");
-
-        startServerThenLoad();
+        // 界面从内置 assets 即时渲染(毫秒级):
+        // 没有启动画面、没有二次切换、没有多余历史记录 —— 打开即真界面。
+        // 数据由前端 bootLoop 在 Python 就绪后自动补载;
+        // BASE_URL 仅固定页面 origin 以兼容旧版 localStorage
+        String html = readAsset("index.html");
+        web.loadDataWithBaseURL(BASE_URL, html, "text/html", "utf-8", null);
+        Dbg.w(this, "[ui] 界面已从 assets 即时渲染(" + html.length() + " 字节)");
         Dbg.w(this, "onCreate 完成");
     }
 
     /**
-     * 无端口启动流程:初始化 Python → 渲染界面 → 完成。
-     * 没有 Flask 服务线程、没有端口监听、没有轮询探测;
-     * 页面数据全部经 AndroidBridge 直连 Python(handle_api 进程内分发)。
+     * 后台初始化 Python(无端口架构):没有 Flask 服务线程、没有端口监听,
+     * 模块加载完成即后端就绪 → 回调前端补数据 + Toast 提示。
+     * 就绪前的桥调用会安全返回业务错误,由前端自动重试,无需任何锁等待。
      */
-    private void startServerThenLoad() {
+    private void startPythonInit() {
         final Context self = this;
         toast(self, "蓝莓派启动中…");
         new Thread(() -> {
-            Dbg.w(self, "[py] 线程启动,准备初始化 Python…");
             try {
                 try {
                     Python.start(new AndroidPlatform(self));   // ← 缺了这步导致的崩溃
@@ -116,25 +118,29 @@ public class MainActivity extends Activity {
                     // 同一进程内二次进入:Python 已初始化过会抛异常,复用现有实例即可
                     Dbg.w(self, "[py] Python 已初始化(进程复用): " + dup.getMessage());
                 }
-                PyObject mainApp = Python.getInstance().getModule("main_app");
-                String html = mainApp.callAttr("get_html").toString();
-                runOnUiThread(() -> {
-                    pageLoaded = true;
-                    // baseURL 只用来固定页面 origin(localStorage 兼容),不发任何请求
-                    web.loadDataWithBaseURL(BASE_URL, html, "text/html", "utf-8", null);
-                    // 模块加载完成即后端就绪(无端口架构),直接提示完成
-                    toast(self, "✓ 启动完成");
-                    Dbg.w(self, "[ui] 界面已加载(" + html.length()
-                        + " 字节),JS↔Python 桥就绪(无端口模式)");
-                });
-                Dbg.w(self, "[py] Python 已初始化,模块已加载");
+                Python.getInstance().getModule("main_app");    // 预热导入(flask/requests 等)
+                Dbg.w(self, "[py] Python 就绪(无端口模式)");
+                postJs("window.onServerReady && window.onServerReady()");   // 触发数据补载
+                runOnUiThread(() -> toast(self, "✓ 启动完成"));
             } catch (Throwable t) {
                 Dbg.w(self, "‼️ [py] 初始化失败", t);
-                runOnUiThread(() -> web.loadData(
-                    "<h3 style='font-family:sans-serif;color:#e33'>服务初始化失败,详见 debug.log</h3>",
-                    "text/html", "utf-8"));
+                uiToast("服务初始化失败,详见 debug.log");
             }
         }, "py-init").start();
+    }
+
+    /** 从内置 assets 读取文本文件(构建期由 syncEmbeddedHtml 任务从 main_app.py 同步)。 */
+    private String readAsset(String name) {
+        try (InputStream is = getAssets().open(name)) {
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) > 0) bo.write(buf, 0, n);
+            return bo.toString("UTF-8");
+        } catch (Exception e) {
+            Dbg.w(this, "‼️ 读取内置界面失败: " + name, e);
+            return "<h3 style='color:#e33;font-family:sans-serif'>内置界面缺失</h3>";
+        }
     }
 
     /** 把结果送回页面 JS(evaluateJavascript 必须在主线程)。 */
@@ -157,13 +163,14 @@ public class MainActivity extends Activity {
                     payload = Python.getInstance().getModule("main_app")
                         .callAttr("handle_api", path).toString();
                 } catch (Throwable t) {
+                    // Python 尚未就绪/调用异常:返回业务级错误,前端会自动重试
                     Dbg.w(self, "‼️ [bridge] " + path + " 调用失败", t);
                     try {
                         payload = new JSONObject()
                             .put("status", 500)
                             .put("body", new JSONObject()
                                 .put("code", 500)
-                                .put("message", "Python 调用失败").toString())
+                                .put("message", "服务初始化中").toString())
                             .toString();
                     } catch (Exception ignored) { return; }
                 }
@@ -307,8 +314,9 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (web != null && web.canGoBack()) web.goBack();
-        else finish();   // 触发 onDestroy → 彻底杀进程,不留后台残留
+        // 单页面应用:没有任何内部导航历史,返回键直接退出
+        // (onDestroy 会杀掉整个进程,不留后台残留)
+        finish();
     }
 
     @Override
