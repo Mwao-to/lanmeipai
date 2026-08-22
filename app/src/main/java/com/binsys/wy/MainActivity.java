@@ -162,10 +162,13 @@ public class MainActivity extends Activity {
         Dbg.w(this, "onCreate 完成");
     }
 
+    /** Python 业务核心就绪标志:桥调用在就绪前排队等待,避免竞态报错 */
+    private static volatile boolean PY_READY = false;
+
     /**
      * 后台初始化 Python(无端口架构):没有 Flask 服务线程、没有端口监听,
      * 模块加载完成即后端就绪 → 回调前端补数据。
-     * 就绪前的桥调用会安全返回业务错误,由前端自动重试,无需任何锁等待。
+     * 就绪前的桥调用在 ApiBridge 内部排队等待,就绪后立即补发。
      */
     private void startPythonInit() {
         final Context self = this;
@@ -181,6 +184,7 @@ public class MainActivity extends Activity {
                 byte[] coreCode = unwrapCore();
                 Python.getInstance().getModule("pyloader").callAttr("install", coreCode);
                 Python.getInstance().getModule("main_app");    // 预热导入(flask/requests 等)
+                PY_READY = true;
                 Dbg.w(self, "[py] Python 就绪(无端口模式,核心已装载 " + coreCode.length + "B)");
                 postJs("window.onServerReady && window.onServerReady()");   // 触发数据补载
             } catch (Throwable t) {
@@ -258,11 +262,15 @@ public class MainActivity extends Activity {
             apiPool.execute(() -> {
                 String payload;
                 try {
+                    // ═══ 排队等待 Python 就绪(冷启动竞态根除):最多等 15 秒 ═══
+                    for (int i = 0; !PY_READY && i < 150; i++) Thread.sleep(100);
+                    if (!PY_READY) throw new IllegalStateException("服务初始化超时");
                     payload = Python.getInstance().getModule("main_app")
                         .callAttr("handle_api", path).toString();
                 } catch (Throwable t) {
-                    // Python 尚未就绪/调用异常:返回业务级错误,前端会自动重试
-                    Dbg.w(self, "‼️ [bridge] " + path + " 调用失败", t);
+                    // 真正的异常(非就绪等待)才落盘;排队超时返回业务级错误由前端重试
+                    if (!(t instanceof IllegalStateException))
+                        Dbg.w(self, "‼️ [bridge] " + path + " 调用失败", t);
                     try {
                         payload = new JSONObject()
                             .put("status", 500)

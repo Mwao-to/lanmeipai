@@ -2279,17 +2279,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .modal-btn:hover { background:rgba(74,74,74,var(--glass-alpha)); box-shadow:0 4px 14px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.18); }
   .modal-btn:active { transform:translateY(1px); }
 
-  /* ============ 启动引导浮层:后端未就绪时显示,首个接口成功即自动消失 ============ */
-  #bootTip {
-    position:fixed; left:50%; top:16%; transform:translateX(-50%); z-index:1200;
-    padding:7px 16px; border-radius:14px; pointer-events:none;
-    background:rgba(37,37,38,.85); border:1px solid var(--accent);
-    color:var(--accent-hover); font-family:var(--mono); font-size:12px;
-    box-shadow:0 4px 18px rgba(0,0,0,.5);
-    animation:bootPulse 1.2s ease-in-out infinite;
-  }
-  @keyframes bootPulse { 0%,100%{opacity:.55} 50%{opacity:1} }
-
+  /* (启动引导浮层样式已移除:改用 toast 提示) */
   /* ============ Toast 通知(VS Code 风格) ============ */
   #toasts { position:fixed; right:16px; bottom:105px; z-index:999; display:flex; flex-direction:column; gap:8px; width:320px; max-width:80vw; }
   .toast {
@@ -2677,19 +2667,15 @@ function playHot(i) {
   silentSearch(song.name);    // 再自动搜索同名歌名填充结果面板
 }
 
-/* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + 轻浮层提示 ============
- * 兜底逻辑:若首个 API 调用因任何原因失败(如极端情况下的桥延迟),
- * 首次失败才显示「服务启动中…」浮层(避免正常启动闪现),每 500ms 自动重试
- * 拉取热门歌曲,成功即隐藏;桌面浏览器 fetch 模式同样适用。 */
+/* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============
+ * 若首个 API 调用因任何原因失败(如极端情况下的桥延迟),仅首次失败弹一次
+ * 「服务正在启动中」toast(不遮挡界面),每 500ms 自动重试拉取热门歌曲。
+ * 注:Java 桥已改为排队模式(Python 就绪前请求挂起等待),正常冷启动不会走到这里。 */
 let bootTries = 0, bootDone = false;
-const bootTip = document.createElement('div');
-bootTip.id = 'bootTip'; bootTip.style.display = 'none';
-bootTip.textContent = '⏳ 服务启动中…';
-document.body.appendChild(bootTip);
-function hideBootTip() { if (!bootDone) { bootDone = true; bootTip.remove(); } }
+function hideBootTip() { bootDone = true; }
 async function bootLoop() {
   if (await loadHotSongs()) { hideBootTip(); return; }
-  if (++bootTries === 1) bootTip.style.display = 'block';
+  if (++bootTries === 1) toast('服务正在启动中…', 'info', 2500);
   if (bootTries < 60) setTimeout(bootLoop, 500);   // 最多重试约 30 秒
 }
 bootLoop();
