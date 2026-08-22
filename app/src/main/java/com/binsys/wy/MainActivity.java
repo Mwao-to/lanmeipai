@@ -191,6 +191,9 @@ public class MainActivity extends Activity {
                 // 装载加密业务核心:Java 解密 → 内存字节码注入(无明文落盘)
                 byte[] coreCode = unwrapCore();
                 Python.getInstance().getModule("pyloader").callAttr("install", coreCode);
+                // 注入私有目录:A键扫码登录的 cooir.json 落盘位置(启动自检自动代入全局 Cookie)
+                Python.getInstance().getModule("main_app")
+                    .callAttr("init_data_dir", self.getFilesDir().getAbsolutePath());
                 Python.getInstance().getModule("main_app");    // 预热导入(flask/requests 等)
                 PY_READY = true;
                 Dbg.w(self, "[py] Python 就绪(无端口模式,核心已装载 " + coreCode.length + "B)");

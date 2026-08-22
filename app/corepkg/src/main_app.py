@@ -986,6 +986,41 @@ def set_wy_cookie(cookie):
 def get_wy_cookie() :
     return _WY_COOKIE
 
+
+# ═══ cooir.json 持久化(A键兜底):私有目录下的账号 Cookie 库 ═══
+_DATA_DIR = ''          # 由 Java 启动时注入 FilesDir;为空(服务器模式)则跳过落盘
+
+def init_data_dir(path):
+    """Java 启动时注入应用私有目录,用于 cooir.json 持久化(幂等)。"""
+    global _DATA_DIR
+    _DATA_DIR = (path or '').strip()
+
+def _cookie_file():
+    return os.path.join(_DATA_DIR, 'cooir.json') if _DATA_DIR else ''
+
+def _save_cookie_file(cookie):
+    """Cookie 写入私有目录 cooir.json;失败不影响运行态。"""
+    f = _cookie_file()
+    if not f:
+        return False
+    try:
+        with open(f, 'w', encoding='utf-8') as fp:
+            json.dump({'cookie': cookie, 'ts': time.time()}, fp)
+        return True
+    except Exception:
+        return False
+
+def _load_cookie_file():
+    f = _cookie_file()
+    if not f or not os.path.exists(f):
+        return ''
+    try:
+        with open(f, 'r', encoding='utf-8') as fp:
+            d = json.load(fp)
+        return (d.get('cookie') or '').strip()
+    except Exception:
+        return ''
+
 UA_PC = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
          '(KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Edg/108.0.1462.54')
 UA_OLD = ('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 '
@@ -2007,6 +2042,100 @@ def api_set_cookie():
     return jsonify({'code': 200, 'message': 'Cookie 已设置', 'has_cookie': bool(cookie)})
 
 
+# ═══ 网易云官方扫码登录(A键·第三方全灭时的最后兑底) ═══
+# 流程:/api/qr_start 生成官方 unikey → 本地渲染二维码(SVG,不经第三方图床) →
+#       /api/qr_check 轮询状态(801等待/802已扫/803成功捕获Cookie/800过期自动刷新)
+_qr_key = {'v': ''}
+
+def _capture_cookie():
+    """从登录会话捕获关键 Cookie(MUSIC_U 为主,含 csrf)。"""
+    parts = []
+    try:
+        for c in _session.cookies:
+            if c.name in ('MUSIC_U', '__csrf_token') and c.value:
+                parts.append(f'{c.name}={c.value}')
+    except Exception:
+        pass
+    return '; '.join(parts)
+
+@app.get('/api/qr_start')
+def api_qr_start():
+    """生成官方登录二维码:unikey → 本地 SVG(圆角白底由前端容器保证可扫)。"""
+    _ensure_init()
+    try:
+        _session.cookies.clear()          # 清旧登录态,避免捕获到过期 MUSIC_U
+        _wy_warm()
+        resp = http_fetch(
+            'https://music.163.com/weapi/login/qrcode/unikey',
+            method='post',
+            headers={'User-Agent': UA_PC, 'origin': 'https://music.163.com',
+                     'Referer': 'https://music.163.com/'},
+            form=weapi({'type': '1'}),
+            timeout=8, retry=2,
+        )
+        body = resp['body']
+        key = ((body or {}).get('unikey') or '') if isinstance(body, dict) else ''
+        if not key:
+            return jsonify({'code': 500, 'message': '获取登录码失败'})
+        import io
+        import qrcode
+        import qrcode.image.svg
+        img = qrcode.make('https://music.163.com/login?keyuuid=' + key,
+                          image_factory=qrcode.image.svg.SvgPathImage)
+        buf = io.BytesIO()               # qrcode 8.x SVG 工厂要求二进制流(StringIO 会崩)
+        img.save(buf)
+        _qr_key['v'] = key
+        return jsonify({'code': 200, 'data': {'key': key, 'qrsvg': buf.getvalue().decode('utf-8')}})
+    except Exception as e:
+        return jsonify({'code': 500, 'message': str(e)})
+
+@app.get('/api/qr_check')
+def api_qr_check():
+    """轮询扫码状态;803 时捕获 Set-Cookie → 运行态 + cooir.json 双写。"""
+    _ensure_init()
+    key = (request.args.get('key') or '').strip()
+    if not key:
+        return jsonify({'code': 400, 'message': '缺少 key'})
+    try:
+        resp = http_fetch(
+            'https://music.163.com/weapi/login/qrcode/client/login',
+            method='post',
+            headers={'User-Agent': UA_PC, 'origin': 'https://music.163.com',
+                     'Referer': 'https://music.163.com/'},
+            form=weapi({'key': key, 'type': '1'}),
+            timeout=8, retry=2,
+        )
+        body = resp['body']
+        st = int((body or {}).get('code') or 0) if isinstance(body, dict) else 0
+        if st == 803:
+            cookie = _capture_cookie()
+            if cookie:
+                set_wy_cookie(cookie)         # 立即生效:后续取链/VIP 播放直接可用
+                _save_cookie_file(cookie)     # 落盘 cooir.json,重启自动代入
+            return jsonify({'code': 200, 'data': {
+                'status': 'success', 'has_cookie': bool(cookie), 'cookie': cookie}})
+        status_map = {800: 'expired', 801: 'waiting', 802: 'scanned'}
+        return jsonify({'code': 200, 'data': {'status': status_map.get(st, 'waiting')}})
+    except Exception as e:
+        return jsonify({'code': 500, 'message': str(e)})
+
+@app.get('/api/cookie_get')
+def api_cookie_get():
+    """回显当前 Cookie(编辑框内容刷新用)。"""
+    _ensure_init()
+    c = get_wy_cookie()
+    return jsonify({'code': 200, 'data': {'cookie': c, 'has_cookie': bool(c)}})
+
+@app.get('/api/cookie_save')
+def api_cookie_save():
+    """保存手动粘贴的 Cookie:强制单行归一 → 运行态 + cooir.json 双写。"""
+    _ensure_init()
+    cookie = (request.args.get('c') or '').strip().replace('\n', '').replace('\r', '')
+    set_wy_cookie(cookie)
+    ok = _save_cookie_file(cookie)
+    return jsonify({'code': 200, 'data': {'saved': ok, 'has_cookie': bool(cookie), 'cookie': cookie}})
+
+
 if __name__ == '__main__':
     cookie = os.environ.get('WY_COOKIE', '')
     if cookie:
@@ -2038,6 +2167,10 @@ def _ensure_init():
     cookie = os.environ.get('WY_COOKIE', '')
     if cookie:
         set_wy_cookie(cookie)
+    else:
+        saved = _load_cookie_file()      # 启动自检:cooir.json 有内容则代入全局变量供取链调用
+        if saved:
+            set_wy_cookie(saved)
     _BRIDGE_INITED = True
 
 
@@ -2326,16 +2459,16 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
    * 容器与播放器同圆角(--r-xl)同玻璃质感;宽度为播放器一半(小 1 倍)且横向居中;
    * 内部 5 键等权 1:1,透明药丸+红字(与播放器下载标签同配色) */
   .quick-bar {
-    display:flex; gap:6px; align-items:center;
-    width:50%; margin:10px auto 0;          /* 播放器一半宽,横向居中 */
-    padding:6px; box-sizing:border-box;
+    display:flex; gap:8px; align-items:center;
+    width:100%; max-width:680px; margin:10px auto 0;   /* 长度与播放器一致 */
+    padding:8px; box-sizing:border-box;
     background:linear-gradient(165deg, rgba(46,46,52,.6), rgba(24,24,28,.68));
     border:1px solid rgba(255,255,255,.11); border-radius:var(--r-xl);
     box-shadow:0 8px 24px rgba(0,0,0,.4), var(--hi-top);
   }
   .quick-bar button {
     flex:1 1 0; min-width:0;                 /* 五键权重 1:1,等宽等大 */
-    padding:5px 0; font-family:var(--mono); font-size:10.5px;
+    padding:8px 0; font-family:var(--mono); font-size:16px;   /* 较初版增大 0.5 倍 */
     color:var(--accent-hover); background:rgba(255,255,255,.05);
     border:1px solid var(--glass-border); border-radius:99px;
     text-align:center; cursor:pointer; user-select:none; touch-action:manipulation;
@@ -2344,6 +2477,34 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   @media (hover:hover) { .quick-bar button:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
   .quick-bar button:active { transform:scale(.9); }   /* 弹性按压,与全站一致 */
+
+  /* ═══ A键·扫码登录弹窗(布局同下载弹窗,内容专属) ═══ */
+  .qr-scroll {
+    width:100%; max-height:56vh; overflow-y:auto;
+    scrollbar-width:none; -ms-overflow-style:none;
+  }
+  .qr-scroll::-webkit-scrollbar { display:none; }
+  /* 二维码白底圆角框:padding 保证安静区,圆角不侵入码点,可正常扫描 */
+  .qr-imgbox {
+    width:210px; margin:0 auto 10px; padding:12px;
+    background:#fff; border-radius:14px;
+    box-shadow:0 4px 18px rgba(0,0,0,.35);
+  }
+  .qr-imgbox svg { display:block; width:100%; height:auto; border-radius:6px; }
+  .qr-status {
+    font-family:var(--mono); font-size:10px; color:var(--muted);
+    margin-bottom:10px; letter-spacing:.5px; text-align:center;
+  }
+  #cookieInput {
+    width:100%; box-sizing:border-box; padding:9px 12px;
+    border-radius:var(--r-md); border:1px solid var(--glass-border);
+    background:rgba(16,16,18,.5); color:var(--text-bright);
+    font-family:var(--mono); font-size:11px; outline:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;  /* 强制单行显示 */
+  }
+  #cookieInput:focus { border-color:rgba(236,65,65,.65); box-shadow:0 0 0 3px rgba(236,65,65,.16); }
+  .cookie-actions { display:flex; gap:8px; width:100%; margin-top:10px; }
+  .cookie-actions .modal-btn { flex:1; margin-top:0; max-width:none; }
   .dl-tag:active { transform:scale(.9); }
   #mvModal .modal-box { width:min(340px, 88vw); }
   .modal-box video {
@@ -2566,6 +2727,23 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     <video id="mvVideo" controls playsinline style="display:none"></video>
     <div class="loading" id="mvLoading">MV 加载中</div>
     <button class="modal-btn" onclick="downloadMv()">下载 MV</button>
+  </div>
+</div>
+
+<div class="modal-mask" id="cookieModal">
+  <div class="modal-box">
+    <button class="modal-x" onclick="closeCookieModal()" title="关闭">○</button>
+    <div class="modal-title">网易云账号 · 扫码登录</div>
+    <div class="qr-scroll">
+      <div class="qr-imgbox" id="qrImgBox"><div style="padding:28px 0;color:#888;text-align:center;font-size:11px">二维码生成中…</div></div>
+      <div class="qr-status" id="qrStatus">// 等待开始</div>
+      <input id="cookieInput" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             placeholder="扫码后自动填入；也可手动粘贴 Cookie(MUSIC_U=…)">
+      <div class="cookie-actions">
+        <button class="modal-btn secondary" onclick="clearCookieInput()">清空输入框</button>
+        <button class="modal-btn" onclick="saveCookieInput()">保存兑底</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2798,8 +2976,87 @@ function playHot(i) {
 /* ═══ 五键快捷条(ABCDE 功能占位):点击提示待接入 ═══ */
 $('quickBar').addEventListener('click', e => {
   const b = e.target.closest('button[data-fn]');
-  if (b) toast(`「${b.dataset.fn}」功能预留位,待接入`, 'info', 1500);
+  if (!b) return;
+  const fn = b.dataset.fn;
+  if (fn === 'A') { openCookieModal(); return; }   // A:网易云扫码登录·最后兑底
+  toast(`「${fn}」功能预留位,待接入`, 'info', 1500);
 });
+
+/* ═══ A键·扫码登录兜底(cooir.json 持久化) ═══
+ * 官方 unikey → 本地 SVG 二维码 → 3s 轮询状态 → 803 捕获 Cookie 双写运行态+文件 */
+let qrTimer = null, qrKey = '';
+function openCookieModal() {
+  $('cookieModal').classList.add('show');
+  $('cookieInput').value = '';                     // 默认空,不聚焦不唤起输入法
+  loadSavedCookie();
+  qrStart();
+}
+function closeCookieModal() {
+  $('cookieModal').classList.remove('show');
+  if (qrTimer) { clearInterval(qrTimer); qrTimer = null; }   // 关窗即停轮询
+}
+$('cookieModal').addEventListener('click', e => { if (e.target.id === 'cookieModal') closeCookieModal(); });
+
+async function loadSavedCookie() {
+  try {
+    const r = await api('/api/cookie_get');
+    if (r.code === 200 && r.data && r.data.cookie) $('cookieInput').value = r.data.cookie;
+  } catch (e) { /* 静默:编辑框保持默认空 */ }
+}
+async function qrStart() {
+  $('qrStatus').textContent = '// 正在生成二维码…';
+  try {
+    const r = await api('/api/qr_start');
+    if (r.code !== 200 || !(r.data && r.data.qrsvg)) {
+      $('qrStatus').textContent = '// 生成失败:' + (r.message || '') + ',3 秒后重试';
+      setTimeout(() => { if ($('cookieModal').classList.contains('show')) qrStart(); }, 3000);
+      return;
+    }
+    qrKey = r.data.key;
+    $('qrImgBox').innerHTML = r.data.qrsvg;        // 本地 SVG 直渲,不经第三方图床
+    $('qrStatus').textContent = '// 请用网易云音乐 APP 扫一扫';
+    pollQr();
+  } catch (e) {
+    $('qrStatus').textContent = '// 网络异常,3 秒后重试';
+    setTimeout(() => { if ($('cookieModal').classList.contains('show')) qrStart(); }, 3000);
+  }
+}
+function pollQr() {
+  if (qrTimer) clearInterval(qrTimer);
+  qrTimer = setInterval(async () => {
+    if (!$('cookieModal').classList.contains('show') || !qrKey) return;
+    try {
+      const r = await api(`/api/qr_check?key=${encodeURIComponent(qrKey)}`);
+      const st = r.code === 200 && r.data ? r.data.status : '';
+      if (st === 'scanned') $('qrStatus').textContent = '// 已扫描,请在手机上确认登录';
+      else if (st === 'expired') {                  // 过期自动检测 → 自动刷新二维码
+        $('qrStatus').textContent = '// 二维码已过期,自动刷新…';
+        clearInterval(qrTimer); qrTimer = null; qrStart();
+      } else if (st === 'success') {
+        clearInterval(qrTimer); qrTimer = null;
+        $('qrStatus').textContent = '// 登录成功,Cookie 已捕获入库';
+        toast('已登录,Cookie 已保存为播放兑底', 'success', 3000);
+        if (r.data && r.data.cookie) $('cookieInput').value = r.data.cookie;   // 编辑框刷新回显
+      }
+    } catch (e) { /* 单次轮询失败静默,下一轮再试 */ }
+  }, 3000);
+}
+function clearCookieInput() {
+  $('cookieInput').value = '';
+  toast('已清空输入框(不影响已保存)', 'info', 1500);
+}
+async function saveCookieInput() {
+  const c = $('cookieInput').value.trim();
+  if (!c) { toast('输入框为空', 'warn', 1500); return; }
+  try {
+    const r = await api('/api/cookie_save?c=' + encodeURIComponent(c));
+    if (r.code === 200) {
+      $('cookieInput').value = (r.data && r.data.cookie) || c;   // 服务端归一单行后回显
+      toast(r.data.saved ? '已保存到 cooir.json' : '已生效(本机无存储目录,重启后失效)',
+            r.data.saved ? 'success' : 'warn', 2500);
+    } else toast('保存失败:' + (r.message || ''), 'error');
+  } catch (e) { toast('保存失败', 'error'); }
+}
 
 /* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============
  * 若首个 API 调用因任何原因失败(如极端情况下的桥延迟),仅首次失败弹一次
