@@ -2702,7 +2702,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 
   <!-- 五键快捷条:ABCDE 功能占位,横向居中,整体宽度为播放器的一半 -->
   <div class="quick-bar" id="quickBar">
-    <button type="button" data-fn="A">A</button>
+    <button type="button" data-fn="A">登录</button>
     <button type="button" data-fn="B">B</button>
     <button type="button" data-fn="C">C</button>
     <button type="button" data-fn="D">D</button>
@@ -2740,7 +2740,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 <div class="modal-mask" id="mvModal">
   <div class="modal-box">
     <button class="modal-x" onclick="closeMvModal()" title="关闭">○</button>
-    <div class="modal-title" id="mvTitle">▶ MV播放器</div>
+    <div class="modal-title" id="mvTitle">MV播放器</div>
     <video id="mvVideo" controls playsinline style="display:none"></video>
     <div class="loading" id="mvLoading">MV 加载中</div>
     <button class="modal-btn" onclick="downloadMv()">下载 MV</button>
@@ -3671,7 +3671,7 @@ async function openMvModal() {
   if (!bg.paused) bg.pause();          // 打开 MV 弹窗时暂停背景音乐
   $('mvModal').classList.add('show');
   const v = $('mvVideo'), ld = $('mvLoading');
-  $('mvTitle').textContent = `▶ ${state.song ? state.song.name : ''} · MV`;
+  $('mvTitle').textContent = `${state.song ? state.song.name : ''} · MV`;
   v.pause(); v.removeAttribute('src'); v.style.display = 'none';
   ld.style.display = ''; ld.textContent = 'MV 加载中';
   try {
