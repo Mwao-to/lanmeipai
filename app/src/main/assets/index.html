@@ -276,11 +276,11 @@
   .toast.hide { opacity:0; transform:translateX(20px); transition:all .25s; }
   @keyframes toastIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:none; } }
 
-  /* ============ 迷你下载任务面板(panel-title 同级小尺寸,可收缩;
-     进度到 100% 显示「即将完成」;无进行中任务时短暂展示后自动消失) ============ */
+  /* ============ 迷你下载任务面板(固定在页面顶部最右,与标题「网易云-播放/下载器」同排;
+     可收缩;进度到 100% 显示「即将完成」;无进行中任务时短暂展示后自动消失) ============ */
   #dlPanel {
-    position:fixed; right:14px; bottom:14px; z-index:998;
-    width:212px; max-width:64vw;
+    position:fixed; top:10px; right:12px; z-index:998;
+    width:212px; max-width:56vw;
     background:rgba(24,16,17,.94); border:1px solid rgba(236,65,65,.35); border-radius:8px;
     box-shadow:0 6px 18px rgba(0,0,0,.45); overflow:hidden;
     animation:toastIn .18s ease-out;
