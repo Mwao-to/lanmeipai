@@ -25,8 +25,6 @@ jobs:
         with:
           gradle-version: '8.2'
 
-      - name: Install Cython (buildPython requirement for wyapp-core AOT)
-        run: python3 -m pip install --user "cython==3.0.11"
 
       - name: Build arm64 release APK
         run: gradle :app:assembleRelease --no-daemon --stacktrace
