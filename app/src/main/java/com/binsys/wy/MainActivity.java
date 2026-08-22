@@ -2,8 +2,12 @@ package com.binsys.wy;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
@@ -70,6 +74,8 @@ public class MainActivity extends Activity {
     private final ExecutorService apiPool = Executors.newCachedThreadPool();
     /** <Q 设备申请存储权限期间暂存的歌词内容 {name, content} */
     private final String[] pendingText = new String[2];
+    /** 系统下载器兜底:任务 id → 文件名(完成后广播里查路径用) */
+    private final java.util.Map<Long, String> sysDownloads = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -113,6 +119,27 @@ public class MainActivity extends Activity {
         });
         web.setDownloadListener((url, ua, disposition, mime, len)
             -> internalDownload(guessName(url, disposition), url));
+
+        // 系统下载器兜底:内置下载器失败时转交系统继续,完成后同样把保存路径弹给页面
+        final BroadcastReceiver sysDlReceiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context c, Intent i) {
+                long id = i.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1);
+                String name = sysDownloads.remove(id);
+                if (name == null) return;
+                String path = resolveSysDownloadPath(id);
+                if (path != null) {
+                    Dbg.w(self, "[dl][sys] 完成: " + path);
+                    dlEvent("done", name, path);
+                } else {
+                    dlEvent("error", name, "系统下载器下载失败");
+                }
+            }
+        };
+        IntentFilter sysFilter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        if (Build.VERSION.SDK_INT >= 33)
+            registerReceiver(sysDlReceiver, sysFilter, Context.RECEIVER_NOT_EXPORTED);
+        else
+            registerReceiver(sysDlReceiver, sysFilter);
 
         // 界面从内置 assets 即时渲染(毫秒级):
         // 没有启动画面、没有二次切换、没有多余历史记录 —— 打开即真界面。
@@ -396,6 +423,7 @@ public class MainActivity extends Activity {
             AtomicLong done = new AtomicLong();
             ScheduledExecutorService prog = Executors.newSingleThreadScheduledExecutor();
             boolean ok = false;
+            boolean fallback = false;   // 已转交系统下载器
             String errMsg = null;
             try {
                 dlEvent("start", filename, "");
@@ -417,12 +445,12 @@ public class MainActivity extends Activity {
                 // 2. 探测 Range 支持与总大小
                 long[] probe = probeUrl(url);
                 final long total = probe[1];
-                // 3. 进度上报(每 500ms 采样,25% 一档提示)
+                // 3. 进度上报(每 500ms 采样;面板进度条平滑推进,不再发零碎 toast)
                 final long[] lastPct = {-1};
                 prog.scheduleAtFixedRate(() -> {
                     if (total <= 0) return;
                     int pct = (int) (done.get() * 100 / total);
-                    if (pct != lastPct[0] && pct % 25 == 0 && pct > lastPct[0]) {
+                    if (pct != lastPct[0]) {
                         lastPct[0] = pct;
                         dlEvent("progress", filename, String.valueOf(pct));
                     }
@@ -449,9 +477,11 @@ public class MainActivity extends Activity {
             } catch (Throwable t) {
                 errMsg = t.getMessage() == null ? t.toString() : t.getMessage();
                 Dbg.w(self, "‼️ [dl] " + filename + " 下载失败: " + errMsg, t);
+                // 兑底:内置下载器失败 → 转交系统下载器在同一目录继续下载
+                fallback = trySystemFallback(filename, url);
             } finally {
                 prog.shutdownNow();
-                // 5. 收尾:成功发布文件(IS_PENDING=0)并回传真实路径;失败清理残留
+                // 5. 收尾:成功发布文件(IS_PENDING=0)并回传真实路径;未成功清理残留
                 String finalPath = null;
                 try {
                     if (ok && mediaUri != null) {
@@ -462,18 +492,69 @@ public class MainActivity extends Activity {
                         if (finalPath == null) finalPath = "/" + DL_SUBDIR + "/" + filename;
                     } else if (ok) {
                         finalPath = legacy.getAbsolutePath();
+                    } else {
+                        // 内置未成功:清掉半成品残留(系统兑底会重新完整下载)
+                        if (mediaUri != null) self.getContentResolver().delete(mediaUri, null, null);
+                        if (legacy != null && legacy.exists()) legacy.delete();
                     }
-                    if (!ok && mediaUri != null) self.getContentResolver().delete(mediaUri, null, null);
-                    if (!ok && legacy != null && legacy.exists()) legacy.delete();
                 } catch (Throwable ignore) { }
                 if (ok) {
                     Dbg.w(self, "[dl] 完成: " + finalPath);
                     dlEvent("done", filename, finalPath);
-                } else {
+                } else if (!fallback) {
+                    // 系统下载器接管时由完成广播再报 done/error,这里不发 error 避免误报
                     dlEvent("error", filename, errMsg == null ? "未知错误" : errMsg);
                 }
             }
         });
+    }
+
+    /**
+     * 内置下载器失败后的兑底:转交系统 DownloadManager 继续下载,
+     * 目标目录一致(Download/网易云下载器/)。返回是否成功接管。
+     */
+    private boolean trySystemFallback(String filename, String url) {
+        try {
+            DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+            if (dm == null) return false;
+            DownloadManager.Request rq = new DownloadManager.Request(Uri.parse(url));
+            rq.setTitle(filename);
+            rq.setDescription("网易云下载器");
+            rq.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+            rq.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "网易云下载器/" + filename);
+            long id = dm.enqueue(rq);
+            sysDownloads.put(id, filename);
+            Dbg.w(this, "[dl] 内置失败,已转交系统下载器 id=" + id);
+            dlEvent("sys", filename, "");
+            return true;
+        } catch (Throwable t) {
+            Dbg.w(this, "‼️ [dl] 系统下载器接管失败", t);
+            return false;
+        }
+    }
+
+    /** 查询系统下载器已完成任务的本地文件路径。 */
+    private String resolveSysDownloadPath(long id) {
+        Cursor c = null;
+        try {
+            DownloadManager.Query q = new DownloadManager.Query().setFilterById(id);
+            c = ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).query(q);
+            if (c != null && c.moveToFirst()
+                    && c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                       == DownloadManager.STATUS_SUCCESSFUL) {
+                String loc = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI));
+                if (loc == null) return null;
+                Uri u = Uri.parse(loc);
+                if ("file".equals(u.getScheme())) return u.getPath();
+                String p = queryDataPath(this, u);          // Q+ 是 content:// → 查真实路径
+                return p != null ? p : loc;
+            }
+        } catch (Throwable t) {
+            Dbg.w(this, "‼️ [dl][sys] 查询结果失败", t);
+        } finally {
+            if (c != null) try { c.close(); } catch (Exception ignored) { }
+        }
+        return null;
     }
 
     private static String queryDataPath(Context self, Uri uri) {
@@ -514,6 +595,7 @@ public class MainActivity extends Activity {
         final Context self = getApplicationContext();
         apiPool.execute(() -> {
             try {
+                dlEvent("start", filename, "");   // 面板同步显示歌词任务
                 String finalPath;
                 if (Build.VERSION.SDK_INT >= 29) {
                     ContentValues cv = new ContentValues();

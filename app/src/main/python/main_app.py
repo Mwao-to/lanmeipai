@@ -2315,6 +2315,42 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .toast.hide { opacity:0; transform:translateX(20px); transition:all .25s; }
   @keyframes toastIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:none; } }
 
+  /* ============ 常驻下载任务面板(可收缩;全部任务结束自动隐藏) ============ */
+  #dlPanel {
+    position:fixed; right:16px; bottom:16px; z-index:998;
+    width:300px; max-width:80vw;
+    background:#241417; border:1px solid rgba(236,65,65,.4); border-radius:10px;
+    box-shadow:0 8px 28px rgba(0,0,0,.55); overflow:hidden;
+    animation:toastIn .18s ease-out;
+  }
+  #dlPanel.hidden { display:none; }
+  .dl-head {
+    display:flex; align-items:center; gap:8px; padding:9px 12px;
+    cursor:pointer; user-select:none;
+    background:rgba(194,12,12,.22); color:#fff; font-size:12.5px;
+  }
+  .dl-head:hover { background:rgba(194,12,12,.34); }
+  .dl-head .dl-arrow { margin-left:auto; transition:transform .22s; font-size:11px; }
+  #dlPanel.collapsed .dl-arrow { transform:rotate(-90deg); }
+  #dlPanel.collapsed .dl-list { display:none; }
+  .dl-list { max-height:250px; overflow-y:auto; overscroll-behavior:contain; }
+  .dl-item { padding:8px 12px; border-top:1px solid rgba(255,255,255,.06); cursor:pointer; }
+  .dl-item .nm { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:5px; font-size:12px; color:var(--text); }
+  .dl-item .dl-nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dl-item .pc { flex-shrink:0; font-size:11px; color:var(--accent-hover); font-family:var(--mono); }
+  .dl-item.done .pc { color:var(--green); }
+  .dl-item.fail .pc { color:var(--red); }
+  .dl-item.sys .pc { color:var(--yellow); }
+  .dl-bar { height:4px; border-radius:2px; background:rgba(255,255,255,.09); overflow:hidden; }
+  .dl-bar i { display:block; height:100%; width:0%; border-radius:2px;
+    background:linear-gradient(90deg,var(--accent),var(--accent-hover)); transition:width .35s ease-out; }
+  .dl-item.done .dl-bar i { background:var(--green); }
+  .dl-item.fail .dl-bar i { background:var(--red); }
+  .dl-path {
+    margin-top:6px; font-size:10.5px; font-family:var(--mono); color:var(--muted);
+    word-break:break-all; line-height:1.45;
+  }
+
   .loading { color:var(--muted); text-align:center; padding:30px 0; font-family:var(--mono); font-size:10px; }
   .loading::after { content:"…"; animation:dots 1s steps(4) infinite; }
   @keyframes dots { 0%{content:""} 25%{content:"."} 50%{content:".."} 75%{content:"..."} }
@@ -2413,6 +2449,15 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   </div>
 </div>
 
+<!-- 常驻下载任务面板:有任务时常挂页面、点标题可收缩、全部结束自动隐藏;
+     点击已完成条目可复制完整保存路径 -->
+<div id="dlPanel" class="hidden">
+  <div class="dl-head" onclick="toggleDlPanel()">
+    <span>⬇</span><span id="dlHeadText">下载任务</span><span class="dl-arrow">▾</span>
+  </div>
+  <div class="dl-list" id="dlList"></div>
+</div>
+
 <div id="toasts"></div>
 
 <!-- 隐藏的原生 audio:只用于出声,控制由自定义播放器接管 -->
@@ -2467,18 +2512,72 @@ window.__onApiResult = (id, status, body) => {
   try { p.resolve(JSON.parse(body)); } catch (e) { p.reject(new Error('响应解析失败')); }
 };
 
-/* ============ 内置 12 线程下载器事件:开始/进度/完成(含保存路径)/失败 ============
- * 所有下载统一落盘到 公共Download/网易云下载器/ 文件夹,
- * 完成后在此弹窗展示完整保存路径,让用户知道文件在哪。 */
+/* ============ 常驻下载任务面板(可收缩) + 下载器事件 ============
+ * 所有下载统一落盘到 公共Download/网易云下载器/ 文件夹。
+ * 面板与普通 toast 不同:有任务时常驻挂在页面上(网络慢也能看到进度与任务数),
+ * 点击标题可收缩,全部任务结束后自动消失;完成后仍用 toast 弹出绝对路径。 */
+const DL_TASKS = new Map();                       // 文件名 → {st,pct,path,timer}
+let dlCollapsed = false;
+
+function toggleDlPanel() {
+  dlCollapsed = !dlCollapsed;
+  $('dlPanel').classList.toggle('collapsed', dlCollapsed);
+}
+
+function dlRender() {
+  const panel = $('dlPanel');
+  if (!DL_TASKS.size) { panel.classList.add('hidden'); $('dlList').innerHTML = ''; return; }
+  panel.classList.remove('hidden');
+  const all = [...DL_TASKS.values()];
+  const running = all.filter(t => t.st === 'run' || t.st === 'sys').length;
+  $('dlHeadText').textContent = running
+    ? `下载中 · ${running + all.filter(t => t.st === 'done').length} 个任务`
+    : `下载完成 · ${DL_TASKS.size} 个`;
+  $('dlList').innerHTML = [...DL_TASKS.entries()].map(([name, t]) => `
+    <div class="dl-item ${t.st}"${t.path ? ` data-path="${esc(t.path)}" title="点击复制完整路径"` : ''}>
+      <div class="nm"><span class="dl-nm">${esc(name)}</span><span class="pc">${t.st === 'done' ? '✓ 100%'
+        : t.st === 'fail' ? '✗ 失败'
+        : t.st === 'sys' ? '⇣ 系统下载器'
+        : t.pct + '%'}</span></div>
+      <div class="dl-bar"><i style="width:${t.st === 'done' ? 100 : t.pct}%"></i></div>
+      ${t.st === 'done' && t.path ? `<div class="dl-path">已保存到:${esc(t.path)}</div>` : ''}
+    </div>`).join('');
+}
+
+/* 点击已完成的条目 → 复制完整保存路径 */
+$('dlList').addEventListener('click', e => {
+  const it = e.target.closest('.dl-item');
+  const p = it && it.dataset.path;
+  if (!p) return;
+  if (navigator.clipboard) navigator.clipboard.writeText(p)
+    .then(() => toast('保存路径已复制', 'success')).catch(() => {});
+});
+
 window.__onDownloadEvent = (status, filename, detail) => {
-  if (status === 'start') toast(`开始下载「${filename}」(12 线程)`, 'info');
-  else if (status === 'progress') {
-    if (detail % 25 === 0) toast(`${filename} 已下载 ${detail}%`, 'info', 1200);
+  const t = DL_TASKS.get(filename);
+  if (status === 'start') {
+    DL_TASKS.set(filename, { st:'run', pct:0 });
+    if (dlCollapsed) toggleDlPanel();             // 新任务到达自动展开
+  } else if (status === 'progress') {
+    if (!t || t.st !== 'run') return;             // 迟到的进度事件丢弃
+    t.pct = Math.max(t.pct, parseInt(detail, 10) || 0);
+  } else if (status === 'sys') {
+    if (t) { clearTimeout(t.timer); t.st = 'sys'; }   // 内置失败,系统下载器接管中
   } else if (status === 'done') {
-    toast(`「${filename}」下载完成\n已保存到:${detail}`, 'success', 10000);
+    if (t) {
+      t.st = 'done'; t.path = detail;
+      t.timer = setTimeout(() => { DL_TASKS.delete(filename); dlRender(); }, 8000);
+    }
+    /* 无论面板里有没有该任务,完成必弹包含绝对路径的提示 */
+    toast(`「${filename}」下载完成\n已保存到:${detail}`, 'success', 12000);
   } else if (status === 'error') {
-    toast(`下载失败「${filename}」:${detail}`, 'error', 6000);
+    if (t) {
+      t.st = 'fail';
+      t.timer = setTimeout(() => { DL_TASKS.delete(filename); dlRender(); }, 6000);
+    }
+    toast(`下载失败「${filename}」:${detail}`, 'error', 7000);
   }
+  dlRender();
 };
 function fmtTime(s) { if (!isFinite(s) || s <= 0) return '00:00'; s = Math.floor(s); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
 
@@ -2965,6 +3064,7 @@ function closeMvModal() {
 
 async function downloadMv() {
   if (!mvState.mvid || !state.song) return;
+  closeMvModal();   // 与歌曲一致:点击下载立即关弹窗,避免遮挡提示与任务面板
   const filename = `${safeName(state.song.name)}-${safeName(state.song.singer)}-MV.mp4`;
   try {
     const r = await api(`/api/mv/url?mvid=${mvState.mvid}`);

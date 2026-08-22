@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 13
-        versionName '3.0'   // 内置12线程下载器,统一落盘 Download/网易云下载器/
+        versionCode 14
+        versionName '3.1'   // 常驻可收缩下载面板+系统下载器兜底+MV弹窗自动关闭
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
