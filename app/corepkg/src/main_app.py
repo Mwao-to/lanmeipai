@@ -3223,10 +3223,26 @@ async function loadLyric(song, seq) {
   const songKey = song.songmid;
   // 先清空歌词面板(防止上一首残留导致高亮"原地不动")
   renderLyricsEmpty();
+  /* ═══ 统一容错(与取链路一致):4 秒超时 × 3 次,仅网络超时才重试,"暂无歌词"不重试 ═══ */
+  let r = null;
+  for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
+    try {
+      r = await withTimeout(api(`/api/lyric?songmid=${encodeURIComponent(songKey)}`), URL_TIMEOUT_MS);
+      if (!state.song || state.song.songmid !== songKey) return; // 切歌竞态保护
+      if (seq !== undefined && seq !== playSeq) return;          // 双保险:过期响应丢弃
+      break;   // 收到业务响应(含暂无歌词):不再重试
+    } catch (e) {
+      r = null;
+      if (!state.song || state.song.songmid !== songKey) return;
+      if (seq !== undefined && seq !== playSeq) return;
+      if (attempt < URL_MAX_RETRY) toast(`歌词加载超时，自动重试 ${attempt}/${URL_MAX_RETRY - 1}`, 'warn', 1500);
+    }
+  }
+  if (!r) {   // 三次全败:提示网络差
+    if (state.song && state.song.songmid === songKey) toast('当前网络环境较差，歌词暂时无法加载', 'error', 3000);
+    return;
+  }
   try {
-    const r = await api(`/api/lyric?songmid=${songKey}`);
-    if (!state.song || state.song.songmid !== songKey) return; // 切歌竞态保护
-    if (seq !== undefined && seq !== playSeq) return;          // 双保险:过期响应丢弃
     if (r.code !== 200 || !r.data || !r.data.lyric) {
       toast('这首歌暂无歌词', 'info', 2500);
       return;
