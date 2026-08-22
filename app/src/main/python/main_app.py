@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations   # 必须:让 str|None 等注解延迟求值,兼容 Chaquopy 默认 Python 3.8
 """蓝莓派单文件版:全部后端逻辑 + 内嵌 HTML 界面(供 Chaquopy 打包,零文件系统依赖)"""
 
 # ════════ wyapi/log.py ════════
@@ -18,7 +17,7 @@ _console = True
 LEVELS = {'debug': 10, 'info': 20, 'warn': 30, 'error': 40}
 
 
-def init(log_dir: str | None, console: bool = True):
+def init(log_dir, console = True):
     global _LOG_DIR, _console
     _LOG_DIR = log_dir
     _console = console
@@ -27,10 +26,10 @@ def init(log_dir: str | None, console: bool = True):
 
 
 class _Logger:
-    def __init__(self, name: str):
+    def __init__(self, name):
         self.name = name
 
-    def _write(self, lv: str, msg: str):
+    def _write(self, lv, msg):
         if LEVELS.get(lv, 20) < LEVELS.get(_level, 20):
             return
         line = f'[{time.strftime("%H:%M:%S")}][{lv.upper()}][{self.name}] {msg}'
@@ -53,10 +52,10 @@ class _Logger:
     def error(self, msg): self._write('error', str(msg))
 
 
-_loggers: dict = {}
+_loggers = {}
 
 
-def get_logger(name: str) -> _Logger:
+def get_logger(name) :
     if name not in _loggers:
         _loggers[name] = _Logger(name)
     return _loggers[name]
@@ -86,7 +85,7 @@ import string
 
 # ---------------------------------------------------------------- GF(2^8)
 
-def _gf_mul(a: int, b: int) -> int:
+def _gf_mul(a, b) :
     """GF(2^8) 乘法,不可约多项式 x^8+x^4+x^3+x+1 (0x11B)。"""
     res = 0
     while b:
@@ -99,7 +98,7 @@ def _gf_mul(a: int, b: int) -> int:
     return res & 0xFF
 
 
-def _gf_pow(base: int, exp: int) -> int:
+def _gf_pow(base, exp) :
     result = 1
     while exp:
         if exp & 1:
@@ -111,7 +110,7 @@ def _gf_pow(base: int, exp: int) -> int:
 
 # ---------------------------------------------------------------- S-box
 
-def _gen_sbox() -> list:
+def _gen_sbox() :
     sbox = [0] * 256
     for i in range(256):
         inv = 0 if i == 0 else _gf_pow(i, 254)  # a^254 = a^-1
@@ -143,7 +142,7 @@ _INV_SHIFT_ROWS_IDX = (0, 13, 10, 7, 4, 1, 14, 11, 8, 5, 2, 15, 12, 9, 6, 3)
 
 # ---------------------------------------------------------------- AES 核心
 
-def _expand_key(key: bytes) -> list:
+def _expand_key(key) :
     """AES-128 密钥扩展,返回 11 个 16 字节轮密钥。"""
     w = [list(key[4 * i:4 * i + 4]) for i in range(4)]
     for i in range(4, 44):
@@ -159,12 +158,12 @@ def _expand_key(key: bytes) -> list:
 class AES:
     """AES-128 块加密(纯 Python,查表加速)。"""
 
-    def __init__(self, key: bytes):
+    def __init__(self, key):
         if len(key) != 16:
             raise ValueError('AES-128 requires 16-byte key')
         self.rk = _expand_key(key)
 
-    def encrypt_block(self, block: bytes) -> bytes:
+    def encrypt_block(self, block) :
         s = [block[i] ^ self.rk[0][i] for i in range(16)]
         for rnd in range(1, 10):
             s = [SBOX[b] for b in s]                     # SubBytes
@@ -185,7 +184,7 @@ class AES:
         s = [s[i] ^ self.rk[10][i] for i in range(16)]
         return bytes(s)
 
-    def decrypt_block(self, block: bytes) -> bytes:
+    def decrypt_block(self, block) :
         s = [block[i] ^ self.rk[10][i] for i in range(16)]
         for rnd in range(9, 0, -1):
             s = [SBOX_INV[b] for b in s]
@@ -207,12 +206,12 @@ class AES:
         return bytes(s)
 
 
-def pkcs7_pad(data: bytes, block_size: int = 16) -> bytes:
+def pkcs7_pad(data, block_size = 16) :
     pad_len = block_size - (len(data) % block_size)
     return data + bytes([pad_len] * pad_len)
 
 
-def pkcs7_unpad(data: bytes) -> bytes:
+def pkcs7_unpad(data) :
     pad_len = data[-1]
     if pad_len < 1 or pad_len > 16:
         raise ValueError('invalid pkcs7 padding')
@@ -221,7 +220,7 @@ def pkcs7_unpad(data: bytes) -> bytes:
 
 # ---------------------------------------------------------------- 模式封装
 
-def aes_cbc_encrypt(data: bytes, key: bytes, iv: bytes, pad: bool = True) -> bytes:
+def aes_cbc_encrypt(data, key, iv, pad = True) :
     a = AES(key)
     if pad:
         data = pkcs7_pad(data)
@@ -235,7 +234,7 @@ def aes_cbc_encrypt(data: bytes, key: bytes, iv: bytes, pad: bool = True) -> byt
     return bytes(out)
 
 
-def aes_cbc_decrypt(data: bytes, key: bytes, iv: bytes, unpad: bool = True) -> bytes:
+def aes_cbc_decrypt(data, key, iv, unpad = True) :
     a = AES(key)
     prev = iv
     out = bytearray()
@@ -248,14 +247,14 @@ def aes_cbc_decrypt(data: bytes, key: bytes, iv: bytes, unpad: bool = True) -> b
     return pkcs7_unpad(res) if unpad else res
 
 
-def aes_ecb_encrypt(data: bytes, key: bytes, pad: bool = True) -> bytes:
+def aes_ecb_encrypt(data, key, pad = True) :
     a = AES(key)
     if pad:
         data = pkcs7_pad(data)
     return b''.join(a.encrypt_block(data[i:i + 16]) for i in range(0, len(data), 16))
 
 
-def aes_ecb_decrypt(data: bytes, key: bytes, unpad: bool = True) -> bytes:
+def aes_ecb_decrypt(data, key, unpad = True) :
     a = AES(key)
     res = b''.join(a.decrypt_block(data[i:i + 16]) for i in range(0, len(data), 16))
     return pkcs7_unpad(res) if unpad else res
@@ -263,7 +262,7 @@ def aes_ecb_decrypt(data: bytes, key: bytes, unpad: bool = True) -> bytes:
 
 # ---------------------------------------------------------------- RSA (纯 Python)
 
-def der_read_tlv(data: bytes, pos: int = 0):
+def der_read_tlv(data, pos = 0):
     """极简 DER 读取器,返回 (tag, value_bytes, next_pos)。"""
     tag = data[pos]
     pos += 1
@@ -277,7 +276,7 @@ def der_read_tlv(data: bytes, pos: int = 0):
     return tag, value, pos + length
 
 
-def parse_spki_public_key(pem: str):
+def parse_spki_public_key(pem):
     """解析 X.509 SubjectPublicKeyInfo PEM,返回 (n, e)。"""
     b64 = ''.join(pem.strip().split('\n')[1:-1])
     der = base64.b64decode(b64)
@@ -291,7 +290,7 @@ def parse_spki_public_key(pem: str):
     return int.from_bytes(n_bytes, 'big'), int.from_bytes(e_bytes, 'big')
 
 
-def rsa_nopadding_encrypt(data: bytes, n: int, e: int) -> bytes:
+def rsa_nopadding_encrypt(data, n, e) :
     """RSA/ECB/NoPadding:输入必须是 modulus 等长(1024-bit → 128 字节)。"""
     if len(data) != 128:
         raise ValueError(f'RSA NoPadding requires 128-byte input, got {len(data)}')
@@ -326,14 +325,14 @@ def _netease_rsa_key():
     return _NETEASE_RSA_KEY
 
 
-def _json_dumps(obj) -> str:
+def _json_dumps(obj) :
     """与 JS JSON.stringify 一致:无空格、不转义非 ASCII。"""
     return json.dumps(obj, ensure_ascii=False, separators=(',', ':'))
 
 
 # ---------------------------------------------------------------- weapi / eapi / linuxapi
 
-def weapi(obj) -> dict:
+def weapi(obj) :
     """网易云 weapi 加密。与 crypto.js 完全一致(含随机 16 位数字 secretKey)。"""
     text = _json_dumps(obj)
     secret_key = ''.join(random.choices(string.digits, k=16)).encode()
@@ -350,14 +349,14 @@ def weapi(obj) -> dict:
     return {'params': params, 'encSecKey': enc_sec_key}
 
 
-def linuxapi(obj) -> dict:
+def linuxapi(obj) :
     """网易云 linuxapi 加密。eparams = hex(大写)(AES-ECB-PKCS7(text))"""
     text = _json_dumps(obj)
     enc = aes_ecb_encrypt(text.encode(), NETEASE_LINUXAPI_KEY)
     return {'eparams': enc.hex().upper()}
 
 
-def eapi(url: str, obj) -> dict:
+def eapi(url, obj) :
     """网易云 eapi 加密。params = hex(大写)(AES-ECB-PKCS7(data))"""
     text = _json_dumps(obj) if isinstance(obj, dict) else str(obj)
     message = f'nobody{url}use{text}md5forencrypt'
@@ -367,7 +366,7 @@ def eapi(url: str, obj) -> dict:
     return {'params': enc.hex().upper()}
 
 
-def eapi_decrypt(params_hex: str) -> str:
+def eapi_decrypt(params_hex) :
     """eapi 响应解密(hex → AES-ECB 解密)。"""
     raw = bytes.fromhex(params_hex)
     return aes_ecb_decrypt(raw, NETEASE_EAPI_KEY).decode()
@@ -375,15 +374,15 @@ def eapi_decrypt(params_hex: str) -> str:
 
 # ---------------------------------------------------------------- 通用哈希
 
-def md5(text: str) -> str:
+def md5(text) :
     return hashlib.md5(text.encode()).hexdigest()
 
 
-def sha1(text: str) -> str:
+def sha1(text) :
     return hashlib.sha1(text.encode()).hexdigest()
 
 
-def md5_hex_digest(data: bytes) -> str:
+def md5_hex_digest(data) :
     return hashlib.md5(data).hexdigest()
 
 # ════════ wyapi/text.py ════════
@@ -393,7 +392,7 @@ text.py — 文本/格式化工具(移植自原版 src/utils/index.js 相关函�
 """
 
 
-def size_formate(size: int | float) -> str:
+def size_formate(size) :
     """字节数 → 人类可读,如 3.5 MB"""
     if size is None:
         return ''
@@ -406,7 +405,7 @@ def size_formate(size: int | float) -> str:
     return f'{size:.2f} {units[i]}'
 
 
-def format_play_time(seconds) -> str:
+def format_play_time(seconds) :
     """秒 → mm:ss"""
     if seconds is None:
         return '00:00'
@@ -416,7 +415,7 @@ def format_play_time(seconds) -> str:
     return f'{m:02d}:{s:02d}'
 
 
-def date_format(timestamp_ms, fmt: str = 'YYYY-MM-DD') -> str:
+def date_format(timestamp_ms, fmt = 'YYYY-MM-DD') :
     """毫秒时间戳 → 日期字符串。支持 YYYY MM DD HH mm ss 占位符"""
     import time
     ts = timestamp_ms / 1000 if timestamp_ms > 1e11 else timestamp_ms
@@ -435,7 +434,7 @@ def date_format(timestamp_ms, fmt: str = 'YYYY-MM-DD') -> str:
     return out
 
 
-def format_play_count(count) -> str:
+def format_play_count(count) :
     """播放量 → 万/亿"""
     try:
         count = int(count)
@@ -448,7 +447,7 @@ def format_play_count(count) -> str:
     return str(count)
 
 
-def decode_name(name: str) -> str:
+def decode_name(name) :
     """URL 解码(容错)"""
     from urllib.parse import unquote
     try:
@@ -492,12 +491,12 @@ _S2T = {
 }
 
 
-def to_traditional(text: str) -> str:
+def to_traditional(text) :
     """简体 → 繁体(内置常用映射)"""
     return ''.join(_S2T.get(ch, ch) for ch in text)
 
 
-def to_simplified(text: str) -> str:
+def to_simplified(text) :
     """繁体 → 简体(反转映射)"""
     _T2S = {v: k for k, v in _S2T.items()}
     return ''.join(_T2S.get(ch, ch) for ch in text)
@@ -515,58 +514,58 @@ from typing import Any
 
 
 class MusicSource(ABC):
-    id: str = ''          # 音源标识: wy / kw / kg / tx / mg
-    name: str = ''        # 显示名: 网易 / 酷我 / 酷狗 / QQ / 咪咕
-    limit: int = 30
+    id = ''          # 音源标识: wy / kw / kg / tx / mg
+    name = ''        # 显示名: 网易 / 酷我 / 酷狗 / QQ / 咪咕
+    limit = 30
     # 支持的音质(从高到低)
-    qualitys: list = ['hires', 'flac', '320k', '128k']
+    qualitys = ['hires', 'flac', '320k', '128k']
 
     # ---------------- 搜索 ----------------
     @abstractmethod
-    def search(self, keyword: str, page: int = 1, limit: int | None = None) -> dict:
+    def search(self, keyword, page = 1, limit = None) :
         """返回 {list, total, allPage, limit, source}"""
         ...
 
     # ---------------- 歌单 ----------------
     @abstractmethod
-    def songlist_detail(self, list_id: str, page: int = 1, limit: int | None = None) -> dict:
+    def songlist_detail(self, list_id, page = 1, limit = None) :
         """返回 {list, total, page, limit, source, info}"""
         ...
 
     # ---------------- 排行榜 ----------------
     @abstractmethod
-    def leaderboard(self) -> dict:
+    def leaderboard(self) :
         """返回 {list: [{id, name, bangid}], source}"""
         ...
 
     # ---------------- 热搜 ----------------
     @abstractmethod
-    def hot_search(self) -> list:
+    def hot_search(self) :
         """返回 [词1, 词2, ...]"""
         ...
 
     # ---------------- 歌词 ----------------
     @abstractmethod
-    def lyric(self, song: dict) -> dict:
+    def lyric(self, song) :
         """返回 {lyric, tlyric, rlyric, lxlyric}"""
         ...
 
     # ---------------- 播放链接 ----------------
     @abstractmethod
-    def get_music_url(self, song: dict, quality: str) -> str:
+    def get_music_url(self, song, quality) :
         """返回可直接播放的 URL"""
         ...
 
     # ---------------- 附加 ----------------
-    def pic_url(self, song: dict) -> str:
+    def pic_url(self, song) :
         """封面图 URL(可覆盖)"""
         return song.get('img') or ''
 
-    def song_detail_page_url(self, song: dict) -> str:
+    def song_detail_page_url(self, song) :
         return ''
 
     # ---------------- 工具 ----------------
-    def _format_interval(self, ms: int | None) -> str:
+    def _format_interval(self, ms) :
         if not ms:
             return '00:00'
         return format_play_time(ms / 1000 if ms > 10000 else ms)
@@ -575,17 +574,17 @@ class MusicSource(ABC):
 # ---------------------------------------------------------------- 歌曲数据结构
 
 def make_song(
-    source: str,
-    songmid: str,
-    name: str,
-    singer: str,
-    img: str = '',
-    interval: str = '',
-    album_name: str = '',
-    album_id: str = '',
-    types: list | None = None,
-    meta: dict | None = None,
-) -> dict:
+    source,
+    songmid,
+    name,
+    singer,
+    img = '',
+    interval = '',
+    album_name = '',
+    album_id = '',
+    types = None,
+    meta = None,
+) :
     """统一歌曲对象(与原版 handleResult 输出结构一致)"""
     return {
         'source': source,
@@ -630,11 +629,11 @@ _session.trust_env = False  # 不读系统代理,避免 Android 上误走代理
 _cancel_flag = threading.Event()
 
 # cookie 预热: 部分接口需要先访问站点主页建立会话 cookie
-_warm_ups: dict = {}
+_warm_ups = {}
 _warm_lock = threading.Lock()
 
 
-def warm_up(host_url: str):
+def warm_up(host_url):
     """首次请求某站点前先访问主页,建立会话 cookie(幂等,带缓存)"""
     with _warm_lock:
         if _warm_ups.get(host_url):
@@ -647,7 +646,7 @@ def warm_up(host_url: str):
 
 
 # 简单内存缓存: url -> (headers, body_bytes)
-_cache: dict = {}
+_cache = {}
 _cache_lock = threading.Lock()
 CACHE_MAX = 128
 
@@ -666,23 +665,23 @@ def _check_cancel():
 
 
 class HttpError(Exception):
-    def __init__(self, message: str, status_code: int = 0):
+    def __init__(self, message, status_code = 0):
         super().__init__(message)
         self.status_code = status_code
 
 
 def http_fetch(
-    url: str,
-    method: str = 'get',
-    params: dict | None = None,
-    data: dict | None = None,
-    form: dict | None = None,
-    json_body: dict | None = None,
-    headers: dict | None = None,
-    timeout: float = 15.0,
-    retry: int = 3,
-    use_cache: bool = False,
-) -> dict:
+    url,
+    method = 'get',
+    params = None,
+    data = None,
+    form = None,
+    json_body = None,
+    headers = None,
+    timeout = 15.0,
+    retry = 3,
+    use_cache = False,
+) :
     """统一 HTTP 请求。
     返回 {'status_code', 'body'(解析后的 JSON 或原始 bytes), 'headers', 'url'}
     form: application/x-www-form-urlencoded (与原版 httpFetch 的 form 一致)
@@ -699,7 +698,7 @@ def http_fetch(
                 h, b = _cache[cache_key]
                 return _parse_response(b, h, url)
 
-    last_err: Exception | None = None
+    last_err = None
     for attempt in range(retry):
         _check_cancel()
         try:
@@ -735,7 +734,7 @@ def http_fetch(
     raise HttpError(f'请求失败: {url}', getattr(last_err, 'status_code', 0))
 
 
-def _parse_response(body_bytes: bytes, headers, url: str, status_code: int = 200) -> dict:
+def _parse_response(body_bytes, headers, url, status_code = 200) :
     result = {
         'status_code': status_code,
         'headers': headers,
@@ -753,7 +752,7 @@ def _parse_response(body_bytes: bytes, headers, url: str, status_code: int = 200
     return result
 
 
-def _sleep(sec: float):
+def _sleep(sec):
     import time
     for _ in range(int(sec * 10)):
         if _cancel_flag.is_set():
@@ -792,11 +791,11 @@ LEVEL_MAP = {
     'master': 'jymaster',
 }
 
-_ip_cache: dict = {'ip': '', 'ts': 0.0}
+_ip_cache = {'ip': '', 'ts': 0.0}
 _lock = threading.Lock()
 
 
-def _get_ip() -> str:
+def _get_ip() :
     """获取本机出口 IP(接口防滥用参数),缓存 5 分钟"""
     with _lock:
         if _ip_cache['ip'] and time.time() - _ip_cache['ts'] < 300:
@@ -814,7 +813,7 @@ def _get_ip() -> str:
         return ''  # 拿不到 IP 也照发,部分情况下仍可用
 
 
-def _post(path: str, payload: dict) -> dict:
+def _post(path, payload) :
     payload['timestamp'] = int(time.time() * 1000)
     ip = _get_ip()
     if ip:
@@ -833,7 +832,7 @@ def _post(path: str, payload: dict) -> dict:
     return resp.json()
 
 
-def get_song_url(song_id, quality: str = '320k', max_retry: int = 2) -> str:
+def get_song_url(song_id, quality = '320k', max_retry = 2) :
     """第三方解析播放直链。失败抛 RuntimeError。
 
     策略:
@@ -872,7 +871,7 @@ def get_song_url(song_id, quality: str = '320k', max_retry: int = 2) -> str:
     raise RuntimeError(f'第三方解析失败: {last_err}')
 
 
-def _yrc_json_to_lrc(raw: str) -> str:
+def _yrc_json_to_lrc(raw) :
     """网易云逐字歌词转标准LRC,失败返回空串。
     兼容两种格式:
       1. 整体 JSON 数组 [{t,c}, ...]
@@ -912,7 +911,7 @@ def _yrc_json_to_lrc(raw: str) -> str:
     return '\n'.join(out)
 
 
-def _clean_lrc(raw: str) -> str:
+def _clean_lrc(raw) :
     """清洗歌词字段:逐字JSON转标准LRC;无法解析的JSON视为无效返回空串。"""
     raw = (raw or '').strip()
     if raw.startswith('{'):
@@ -921,7 +920,7 @@ def _clean_lrc(raw: str) -> str:
     return raw
 
 
-def get_lyric(song_id, max_retry: int = 2) -> dict:
+def get_lyric(song_id, max_retry = 2) :
     """第三方解析歌词。返回 {lrc, tlyric, yrc}(可能为空串)。失败抛 RuntimeError。"""
     last_err = None
     for attempt in range(max_retry + 1):
@@ -969,12 +968,12 @@ import time
 _WY_COOKIE = ''
 
 
-def set_wy_cookie(cookie: str):
+def set_wy_cookie(cookie):
     global _WY_COOKIE
     _WY_COOKIE = (cookie or '').strip()
 
 
-def get_wy_cookie() -> str:
+def get_wy_cookie() :
     return _WY_COOKIE
 
 UA_PC = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
@@ -993,24 +992,24 @@ def _wy_warm():
 class _Cache:
     """带过期时间的简单缓存"""
 
-    def __init__(self, ttl: float):
+    def __init__(self, ttl):
         self.ttl = ttl
-        self._data: dict = {}
+        self._data = {}
         self._lock = threading.Lock()
 
-    def get(self, key: str):
+    def get(self, key):
         with self._lock:
             item = self._data.get(key)
             if item and item[0] + self.ttl > time.time():
                 return item[1]
         return None
 
-    def set(self, key: str, value):
+    def set(self, key, value):
         with self._lock:
             self._data[key] = (time.time(), value)
 
 
-def eapi_request(url: str, data: dict) -> dict:
+def eapi_request(url, data) :
     """eapi 批量接口请求(与原版 utils/index.js eapiRequest 一致)
     改进: 首次请求前预热 music.163.com 会话 cookie + 带 Referer(反爬必需)
     """
@@ -1035,7 +1034,7 @@ class WYSource(MusicSource):
     _leaderboard_cache = _Cache(1800)
 
     # ---------------- 搜索 ----------------
-    def search(self, keyword: str, page: int = 1, limit: int | None = None, retry_num: int = 0) -> dict:
+    def search(self, keyword, page = 1, limit = None, retry_num = 0) :
         limit = limit or self.limit
         try:
             resp = eapi_request('/api/search/song/list/page', {
@@ -1072,11 +1071,11 @@ class WYSource(MusicSource):
         return self.search(keyword, page, limit, retry_num + 1)
 
     @staticmethod
-    def _get_singer(singers) -> str:
+    def _get_singer(singers) :
         return '、'.join(s.get('name', '') for s in (singers or []))
 
     @staticmethod
-    def _handle_result(raw_list) -> list | None:
+    def _handle_result(raw_list) :
         if not raw_list:
             return []
         result = []
@@ -1117,7 +1116,7 @@ class WYSource(MusicSource):
         return result
 
     # ---------------- 歌单 ----------------
-    def songlist_detail(self, list_id: str, page: int = 1, limit: int | None = None) -> dict:
+    def songlist_detail(self, list_id, page = 1, limit = None) :
         limit = limit or 100000
         list_id, cookie = self._resolve_list_id(list_id)
         _wy_warm()
@@ -1161,7 +1160,7 @@ class WYSource(MusicSource):
     _LIST_LINK_RXP = re.compile(r'^.+(?:\?|&)id=(\d+)(?:&.*$|#.*$|$)')
     _LIST_LINK_RXP2 = re.compile(r'^.+/playlist/(\d+)/\d+/.+$')
 
-    def _resolve_list_id(self, raw_id: str):
+    def _resolve_list_id(self, raw_id):
         cookie = ''
         if '###' in raw_id:
             raw_id, token = raw_id.split('###', 1)
@@ -1178,7 +1177,7 @@ class WYSource(MusicSource):
                 raw_id = m.group(1) if m else raw_id
         return raw_id, cookie
 
-    def _get_song_details(self, ids: list, batch: int = 100) -> list:
+    def _get_song_details(self, ids, batch = 100) :
         """批量获取歌曲详情(weapi/v3/song/detail)"""
         result = []
         for i in range(0, len(ids), batch):
@@ -1237,7 +1236,7 @@ class WYSource(MusicSource):
         ('7785066739', '黑胶VIP热歌榜'), ('7785091694', '黑胶VIP爱搜榜'),
     ]
 
-    def leaderboard(self) -> dict:
+    def leaderboard(self) :
         cached = self._leaderboard_cache.get('list')
         if cached:
             return cached
@@ -1248,7 +1247,7 @@ class WYSource(MusicSource):
         self._leaderboard_cache.set('list', result)
         return result
 
-    def leaderboard_detail(self, bangid: str, limit: int = 100) -> dict:
+    def leaderboard_detail(self, bangid, limit = 100) :
         _wy_warm()
         resp = http_fetch(
             'https://music.163.com/weapi/v3/playlist/detail',
@@ -1269,7 +1268,7 @@ class WYSource(MusicSource):
         }
 
     # ---------------- 热搜 ----------------
-    def hot_search(self) -> list:
+    def hot_search(self) :
         cached = self._hot_cache.get('list')
         if cached:
             return cached
@@ -1283,7 +1282,7 @@ class WYSource(MusicSource):
         return result
 
     # ---------------- 歌词 ----------------
-    def lyric(self, song: dict) -> dict:
+    def lyric(self, song) :
         songmid = song.get('songmid') or (song.get('meta') or {}).get('songId')
         last_err = None
         for attempt in range(3):
@@ -1312,7 +1311,7 @@ class WYSource(MusicSource):
         raise RuntimeError(f'获取歌词失败: {last_err}')
 
     # ---------------- 播放链接 ----------------
-    def get_music_url(self, song: dict, quality: str) -> str:
+    def get_music_url(self, song, quality) :
         song_id = song.get('songmid') or (song.get('meta') or {}).get('songId')
         cookie = get_wy_cookie()
         level_map = {
@@ -1359,7 +1358,7 @@ class WYSource(MusicSource):
             raise RuntimeError('未能获取到播放链接')
         return url
 
-    def get_mv_url(self, mvid, r: int = 1080) -> str:
+    def get_mv_url(self, mvid, r = 1080) :
         """网易云官方 MV 播放直链(weapi song/enhance/play/mv/url)。
         优先请求指定清晰度,无则逐级降级 1080→720→480。"""
         cookie = get_wy_cookie()
@@ -1393,23 +1392,23 @@ class WYSource(MusicSource):
         raise RuntimeError('未能获取到 MV 播放链接')
 
     @staticmethod
-    def _get_no_copyright_song_id(song: dict):
+    def _get_no_copyright_song_id(song):
         ncr = song.get('noCopyrightRcmd') or (song.get('meta') or {}).get('noCopyrightRcmd')
         if not ncr:
             return None
         return ncr.get('songId') or ncr.get('id') or (ncr.get('song') or {}).get('id')
 
     # ---------------- 其他 ----------------
-    def pic_url(self, song: dict) -> str:
+    def pic_url(self, song) :
         return (song.get('meta') or {}).get('picUrl') or song.get('img') or ''
 
-    def song_detail_page_url(self, song: dict) -> str:
+    def song_detail_page_url(self, song) :
         return f'https://music.163.com/#/song?id={song.get("songmid")}'
 
 
 # ---------------------------------------------------------------- 歌词解析(移植 parseTools)
 
-def _ms_format(time_ms: int) -> str:
+def _ms_format(time_ms) :
     if time_ms is None:
         return ''
     ms = time_ms % 1000
@@ -1425,7 +1424,7 @@ _WORD_TIME_ALL_RXP = re.compile(r'(\(\d+,\d+,\d+\))')
 _INFO_RXP = re.compile(r'^{"')
 
 
-def _parse_lyric(lines) -> tuple:
+def _parse_lyric(lines) :
     lxlrc_lines, lrc_lines = [], []
     for line in lines:
         line = line.strip()
@@ -1454,7 +1453,7 @@ def _parse_lyric(lines) -> tuple:
     return '\n'.join(lrc_lines), '\n'.join(lxlrc_lines)
 
 
-def _parse_header_info(text: str) -> list:
+def _parse_header_info(text) :
     if not text:
         return []
     text = text.strip().replace('\r', '')
@@ -1474,7 +1473,7 @@ def _parse_header_info(text: str) -> list:
     return out
 
 
-def _get_intv(interval: str) -> int:
+def _get_intv(interval) :
     if not interval:
         return 0
     if '.' not in interval:
@@ -1486,7 +1485,7 @@ def _get_intv(interval: str) -> int:
     return int(m) * 3600000 + int(s) * 1000 + int(ms)
 
 
-def _fix_time_tag(lrc: str, target_lrc: str) -> str:
+def _fix_time_tag(lrc, target_lrc) :
     lrc_lines = lrc.split('\n')
     target_lines = target_lrc.split('\n')
     time_rxp = re.compile(r'^\[([\d:.]+)\]')
@@ -1516,7 +1515,7 @@ def _fix_time_tag(lrc: str, target_lrc: str) -> str:
     return '\n'.join(new_lrc)
 
 
-def parse_netease_lyric(body: dict) -> dict:
+def parse_netease_lyric(body) :
     """解析网易云歌词响应(含 yrc 逐字歌词 → lxlyric)"""
     info = {'lyric': '', 'tlyric': '', 'rlyric': '', 'lxlyric': ''}
     ylrc = (body.get('yrc') or {}).get('lyric')
@@ -1606,11 +1605,11 @@ def _no_cache(resp):
     return resp
 
 # 搜索缓存:songmid -> song dict(供 /api/url 按 id 取歌)
-_song_cache: dict = {}
+_song_cache = {}
 _SONG_CACHE_MAX = 2000
 
 # 播放链接缓存:songmid|quality -> (url, via, ts),TTL 10 分钟(第三方接口有限流)
-_url_cache: dict = {}
+_url_cache = {}
 _URL_CACHE_TTL = 600
 _URL_CACHE_MAX = 500
 import time as _time
@@ -1710,7 +1709,7 @@ def _resolve_music_url(song, songmid, quality):
             return None, '', f'官方失败: {e1}; 第三方失败: {e2}'
 
 
-def _cd_header(filename: str, ctype: str) -> dict:
+def _cd_header(filename, ctype) :
     """构建下载响应头:双文件名(ASCII 回退 + RFC 5987 中文)兼容所有浏览器,
     部分安卓浏览器/WebView 不认 filename*,会回退按 MIME 命名导致后缀错误。"""
     base, dot, ext = filename.rpartition('.')
