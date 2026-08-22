@@ -276,40 +276,42 @@
   .toast.hide { opacity:0; transform:translateX(20px); transition:all .25s; }
   @keyframes toastIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:none; } }
 
-  /* ============ 常驻下载任务面板(可收缩;全部任务结束自动隐藏) ============ */
+  /* ============ 迷你下载任务面板(panel-title 同级小尺寸,可收缩;
+     进度到 100% 显示「即将完成」;无进行中任务时短暂展示后自动消失) ============ */
   #dlPanel {
-    position:fixed; right:16px; bottom:16px; z-index:998;
-    width:300px; max-width:80vw;
-    background:#241417; border:1px solid rgba(236,65,65,.4); border-radius:10px;
-    box-shadow:0 8px 28px rgba(0,0,0,.55); overflow:hidden;
+    position:fixed; right:14px; bottom:14px; z-index:998;
+    width:212px; max-width:64vw;
+    background:rgba(24,16,17,.94); border:1px solid rgba(236,65,65,.35); border-radius:8px;
+    box-shadow:0 6px 18px rgba(0,0,0,.45); overflow:hidden;
     animation:toastIn .18s ease-out;
   }
   #dlPanel.hidden { display:none; }
   .dl-head {
-    display:flex; align-items:center; gap:8px; padding:9px 12px;
+    display:flex; align-items:center; gap:6px; padding:5px 9px;
     cursor:pointer; user-select:none;
-    background:rgba(194,12,12,.22); color:#fff; font-size:12.5px;
+    background:rgba(194,12,12,.2); color:#fff; font-size:10.5px;
+    font-family:var(--mono); letter-spacing:.5px;
   }
-  .dl-head:hover { background:rgba(194,12,12,.34); }
-  .dl-head .dl-arrow { margin-left:auto; transition:transform .22s; font-size:11px; }
+  .dl-head:hover { background:rgba(194,12,12,.32); }
+  .dl-head .dl-arrow { margin-left:auto; transition:transform .22s; font-size:9px; }
   #dlPanel.collapsed .dl-arrow { transform:rotate(-90deg); }
   #dlPanel.collapsed .dl-list { display:none; }
-  .dl-list { max-height:250px; overflow-y:auto; overscroll-behavior:contain; }
-  .dl-item { padding:8px 12px; border-top:1px solid rgba(255,255,255,.06); cursor:pointer; }
-  .dl-item .nm { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:5px; font-size:12px; color:var(--text); }
+  .dl-list { max-height:168px; overflow-y:auto; overscroll-behavior:contain; }
+  .dl-item { padding:5px 9px; border-top:1px solid rgba(255,255,255,.05); cursor:pointer; }
+  .dl-item .nm { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:3px; font-size:10.5px; color:var(--text); }
   .dl-item .dl-nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .dl-item .pc { flex-shrink:0; font-size:11px; color:var(--accent-hover); font-family:var(--mono); }
+  .dl-item .pc { flex-shrink:0; font-size:9.5px; color:var(--accent-hover); font-family:var(--mono); }
   .dl-item.done .pc { color:var(--green); }
   .dl-item.fail .pc { color:var(--red); }
   .dl-item.sys .pc { color:var(--yellow); }
-  .dl-bar { height:4px; border-radius:2px; background:rgba(255,255,255,.09); overflow:hidden; }
+  .dl-bar { height:3px; border-radius:2px; background:rgba(255,255,255,.08); overflow:hidden; }
   .dl-bar i { display:block; height:100%; width:0%; border-radius:2px;
     background:linear-gradient(90deg,var(--accent),var(--accent-hover)); transition:width .35s ease-out; }
   .dl-item.done .dl-bar i { background:var(--green); }
   .dl-item.fail .dl-bar i { background:var(--red); }
   .dl-path {
-    margin-top:6px; font-size:10.5px; font-family:var(--mono); color:var(--muted);
-    word-break:break-all; line-height:1.45;
+    margin-top:4px; font-size:9px; font-family:var(--mono); color:var(--muted);
+    word-break:break-all; line-height:1.4;
   }
 
   .loading { color:var(--muted); text-align:center; padding:30px 0; font-family:var(--mono); font-size:10px; }
@@ -473,12 +475,14 @@ window.__onApiResult = (id, status, body) => {
   try { p.resolve(JSON.parse(body)); } catch (e) { p.reject(new Error('响应解析失败')); }
 };
 
-/* ============ 常驻下载任务面板(可收缩) + 下载器事件 ============
+/* ============ 迷你下载任务面板(可收缩)+ 下载器事件 ============
  * 所有下载统一落盘到 公共Download/网易云下载器/ 文件夹。
  * 面板与普通 toast 不同:有任务时常驻挂在页面上(网络慢也能看到进度与任务数),
- * 点击标题可收缩,全部任务结束后自动消失;完成后仍用 toast 弹出绝对路径。 */
-const DL_TASKS = new Map();                       // 文件名 → {st,pct,path,timer}
+ * 点击标题可收缩;进度到 100% 后显示「即将完成」而非「下载中」;
+ * 只要没有进行中的任务了,整个面板短暂展示结果后自动消失。 */
+const DL_TASKS = new Map();                       // 文件名 → {st,pct,path,timer,finTimer}
 let dlCollapsed = false;
+let dlHideTimer = null;
 
 function toggleDlPanel() {
   dlCollapsed = !dlCollapsed;
@@ -487,22 +491,39 @@ function toggleDlPanel() {
 
 function dlRender() {
   const panel = $('dlPanel');
+  if (dlHideTimer) { clearTimeout(dlHideTimer); dlHideTimer = null; }
   if (!DL_TASKS.size) { panel.classList.add('hidden'); $('dlList').innerHTML = ''; return; }
   panel.classList.remove('hidden');
   const all = [...DL_TASKS.values()];
-  const running = all.filter(t => t.st === 'run' || t.st === 'sys').length;
+  const running   = all.filter(t => (t.st === 'run' && t.pct < 100) || t.st === 'sys').length;
+  const finishing = all.filter(t => t.st === 'run' && t.pct >= 100).length;   // 已 100% 等收尾
+  const doneN     = all.filter(t => t.st === 'done').length;
   $('dlHeadText').textContent = running
-    ? `下载中 · ${running + all.filter(t => t.st === 'done').length} 个任务`
-    : `下载完成 · ${DL_TASKS.size} 个`;
+    ? `⬇ ${running + finishing}`
+    : finishing ? '即将完成'
+    : `✓ ${doneN || DL_TASKS.size}`;
+  /* 关键:没有任何进行中的任务 → 短暂展示结果后整个面板自动消失,
+   * 不会出现「进度条已 100% 还一直挂着下载中」的情况 */
+  if (!running) dlHideTimer = setTimeout(() => { DL_TASKS.clear(); dlRender(); }, finishing ? 2500 : 1200);
   $('dlList').innerHTML = [...DL_TASKS.entries()].map(([name, t]) => `
     <div class="dl-item ${t.st}"${t.path ? ` data-path="${esc(t.path)}" title="点击复制完整路径"` : ''}>
-      <div class="nm"><span class="dl-nm">${esc(name)}</span><span class="pc">${t.st === 'done' ? '✓ 100%'
+      <div class="nm"><span class="dl-nm">${esc(name)}</span><span class="pc">${t.st === 'done' ? '✓ 完成'
         : t.st === 'fail' ? '✗ 失败'
         : t.st === 'sys' ? '⇣ 系统下载器'
+        : t.pct >= 100 ? '收尾中…'
         : t.pct + '%'}</span></div>
-      <div class="dl-bar"><i style="width:${t.st === 'done' ? 100 : t.pct}%"></i></div>
-      ${t.st === 'done' && t.path ? `<div class="dl-path">已保存到:${esc(t.path)}</div>` : ''}
+      <div class="dl-bar"><i style="width:${Math.min(t.pct, 100)}%"></i></div>
+      ${t.st === 'done' && t.path ? `<div class="dl-path">${esc(t.path)}</div>` : ''}
     </div>`).join('');
+}
+
+/* 保险丝:进度到 100% 但 done 事件迟迟未到(极端丢事件)→ 客户端 5 秒后自动收尾,
+ * 避免条目永远停在「下载中」 */
+function dlAutoFinish(name, t) {
+  if (t.finTimer) return;
+  t.finTimer = setTimeout(() => {
+    if (DL_TASKS.get(name) === t && t.st === 'run') { t.st = 'done'; dlRender(); }
+  }, 5000);
 }
 
 /* 点击已完成的条目 → 复制完整保存路径 */
@@ -522,19 +543,20 @@ window.__onDownloadEvent = (status, filename, detail) => {
   } else if (status === 'progress') {
     if (!t || t.st !== 'run') return;             // 迟到的进度事件丢弃
     t.pct = Math.max(t.pct, parseInt(detail, 10) || 0);
+    if (t.pct >= 100) dlAutoFinish(filename, t);  // 保险丝上膛
   } else if (status === 'sys') {
-    if (t) { clearTimeout(t.timer); t.st = 'sys'; }   // 内置失败,系统下载器接管中
+    if (t) { clearTimeout(t.timer); clearTimeout(t.finTimer); t.st = 'sys'; }   // 系统下载器接管中
   } else if (status === 'done') {
     if (t) {
+      clearTimeout(t.timer); clearTimeout(t.finTimer);
       t.st = 'done'; t.path = detail;
-      t.timer = setTimeout(() => { DL_TASKS.delete(filename); dlRender(); }, 8000);
     }
     /* 无论面板里有没有该任务,完成必弹包含绝对路径的提示 */
     toast(`「${filename}」下载完成\n已保存到:${detail}`, 'success', 12000);
   } else if (status === 'error') {
     if (t) {
+      clearTimeout(t.timer); clearTimeout(t.finTimer);
       t.st = 'fail';
-      t.timer = setTimeout(() => { DL_TASKS.delete(filename); dlRender(); }, 6000);
     }
     toast(`下载失败「${filename}」:${detail}`, 'error', 7000);
   }
