@@ -42,10 +42,11 @@ jobs:
           open('core.marshal', 'wb').write(data[16:])   # 去掉 16 字节 pyc 头,仅保留 marshal 体
           print("✓ 字节码生成:", len(data[16:]), "字节")
           PY
-          mkdir -p ../main/assets
-          openssl enc -aes-256-cbc -K "$CORE_KEY" -iv "$CORE_IV" -in core.marshal -out ../main/assets/core.bin
+          mkdir -p ../src/main/assets
+          openssl enc -aes-256-cbc -K "$CORE_KEY" -iv "$CORE_IV" -in core.marshal -out ../src/main/assets/core.bin
           rm -f core.pyc core.marshal
-          echo "✓ core.bin: $(stat -c%s ../main/assets/core.bin) 字节(AES-256-CBC)"
+          test -f ../src/main/assets/core.bin || { echo '‼️ core.bin 未生成'; exit 1; }
+          echo "✓ core.bin: $(stat -c%s ../src/main/assets/core.bin) 字节(AES-256-CBC)"
 
       - name: Set up Gradle 8.2
         uses: gradle/actions/setup-gradle@v3
