@@ -944,6 +944,13 @@ def get_lyric(song_id, max_retry = 2) :
         }
     raise RuntimeError(f'第三方歌词解析失败: {last_err}')
 
+# toubiec 模块命名空间兼容层(单文件版):server 段沿用原版 `toubiec.get_song_url()` /
+# `toubiec.get_lyric()` 的模块式调用,缺失此对象会导致 VIP/无版权歌曲兜底解析
+# 静默失效(NameError 被 except Exception 吞掉)。
+import types as _types
+
+toubiec = _types.SimpleNamespace(get_song_url=get_song_url, get_lyric=get_lyric)
+
 # ════════ wyapi/wy.py ════════
 # -*- coding: utf-8 -*-
 """

@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    网易云播放直链是明文 HTTP(如 http://m801.music.126.net/...),封面图也多为 http。
+    此配置存在时会覆盖 manifest 的 usesCleartextTraffic,若 base-config 设为 false
+    会导致 WebView 拒绝加载 http 音频流 → App 内一切歌曲都无法播放。
+    因此 base 放行明文流量;127.0.0.1 本地服务同样依赖此放行。
+-->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false"/>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">localhost</domain>
-    </domain-config>
+    <base-config cleartextTrafficPermitted="true"/>
 </network-security-config>
