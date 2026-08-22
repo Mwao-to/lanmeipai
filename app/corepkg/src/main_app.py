@@ -2840,6 +2840,9 @@ function parsePlaylistId(kw) {
   if (m) return { id: m[1], fromUrl: true };
   const t = kw.trim();
   if (/^\d{6,}$/.test(t)) return { id: t, fromUrl: false };
+  // 兑底：残缺链接(如 y.musc.163.com/m/?id=N，缺 playlist 路径/域名拼错)只要含 id=数字 就强行提取
+  const f = t.match(/[?&]id=(\d+)/i);
+  if (f && f[1].length >= 5) return { id: f[1], fromUrl: true };
   return null;
 }
 
