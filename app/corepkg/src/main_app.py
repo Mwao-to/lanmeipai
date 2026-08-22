@@ -2049,7 +2049,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     --bg: #1e1e1e;            /* 编辑器背景 */
     --bg-panel: #252526;      /* 面板背景 */
     --bg-hover: #2a2d2e;      /* 悬停 */
-    --bg-active: #3d1414;     /* 选中行背景(暗红) */
+    --bg-active: #c20c0c;     /* 选中行背景(与搜索按钮同色 网易云红) */
     --bg-input: #3c3c3c;
     --border: #3c3c3c;
     --text: #cccccc;
@@ -2182,10 +2182,10 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .meta { color:var(--muted); font-size:9.5px; margin-bottom:5px; font-family:var(--mono); }
   .song { display:flex; align-items:center; gap:6px; padding:7px 6px; border-radius:3px; cursor:pointer; border-left:2px solid transparent; transition:background .1s; }
   .song:hover { background:var(--bg-hover); }
-  .song.playing { background:var(--bg-active); border-left-color:var(--accent); }
+  .song.playing { background:var(--bg-active); border-left-color:rgba(255,255,255,.55); }
   .song.playing .name { color:var(--text-bright); }
   .song .idx { width:13px; min-width:13px; text-align:center; color:var(--muted); font-size:10px; flex-shrink:0; font-family:var(--mono); }
-  .song.playing .idx { color:var(--accent-hover); }
+  .song.playing .idx { color:#fff; opacity:.92; }
   .song .info { flex:1; min-width:0; white-space:nowrap; overflow:hidden; }
   .song .track { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; will-change:transform; }
   .song .name { font-size:10px; color:var(--text); font-weight:500; }
@@ -2396,7 +2396,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
       </div>
     </div>
     <div class="col">
-      <h3 class="panel-title">搜索结果 RESULTS <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button></span></h3>
+      <h3 class="panel-title">列表 PLAYLIST <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button></span></h3>
       <div class="panel" id="resultPanel">
         <div class="empty" id="resultEmpty">ᕙ(  •̀ ᗜ •́  )ᕗ</div>
         <div id="resultBody"></div>
