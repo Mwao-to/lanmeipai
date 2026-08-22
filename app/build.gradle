@@ -11,14 +11,18 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 17
-        versionName '3.4'   // 修复12线程成功路径卡死latch致done不弹;禁搜索框自动拉输入法
+        versionCode 18
+        versionName '3.5'   // 核心代码Cython AOT编译为原生机器码+R8混淆,APK内无任何业务Python明文
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
+            // wyapp-core:业务核心(main_app.py)经 Cython 编译为 C 扩展,
+            // 构建期由 Chaquopy 自动用 NDK 交叉编译为 arm64 原生机器码 ——
+            // APK 内不存在任何业务 .py/.pyc 明文,无法被字节码反编译
             pip {
                 install 'flask'
                 install 'requests'
+                install 'corepkg/dist/wyapp_core-1.0.tar.gz'
             }
         }
     }
@@ -34,8 +38,11 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // R8 混淆:类名/方法名全部打乱(保留 JS 桥接方法名与 Chaquopy SDK)
+            minifyEnabled true
+            shrinkResources false
             signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
@@ -46,11 +53,11 @@ android {
 }
 
 // ═══ 构建期同步:把 main_app.py 中的内嵌界面提取为 assets/index.html ═══
-// 单一数据源仍是 main_app.py,assets 只是构建产物:
+// 单一数据源仍是 corepkg/src/main_app.py(AOT 编译包内的源文件),assets 只是构建产物:
 // App 端零 Python 依赖即时渲染界面,同时保持服务器模式(/ 路由)共用同一份 HTML
 tasks.register('syncEmbeddedHtml') {
     doLast {
-        def py = file('src/main/python/main_app.py').text
+        def py = file('corepkg/src/main_app.py').text
         def m = (py =~ /(?s)EMBEDDED_HTML = r'''(.*)'''/)
         if (!m.find()) throw new GradleException('EMBEDDED_HTML 未找到,无法生成 assets/index.html')
         file('src/main/assets').mkdirs()

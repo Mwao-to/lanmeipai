@@ -1,0 +1,3 @@
+include src/main_app.py
+include src/main_app.c
+include README.md
