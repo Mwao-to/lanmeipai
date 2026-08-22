@@ -2950,11 +2950,60 @@ $('resultPanel').addEventListener('scroll', () => {
 /* ============ 播放(不自动触发,需用户点击) ============ */
 let playSeq = 0;   // 播放请求序号(latest-wins):连点切歌时,过期响应一律丢弃
 
+/* ══════════ 统一取链容错：超时重试 + 失败回滚（官方/VIP兑底通道共用） ══════════
+ * 单次请求 4 秒未返回即视为超时，自动重试最多 3 次；
+ * 全部失败提示网络差并回滚到之前正在播放的歌曲继续播。 */
+const URL_TIMEOUT_MS = 4000, URL_MAX_RETRY = 3;
+
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('请求超时')), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+/* 返回：成功响应对象 | 'EXPIRED'=期间已切歌 | 'FAILED'=三次均失败 */
+async function fetchUrlWithRetry(song, seq, onRetry) {
+  for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
+    try {
+      const r = await withTimeout(
+        api(`/api/url?songmid=${encodeURIComponent(song.songmid)}&quality=${QUALITY}`), URL_TIMEOUT_MS);
+      if (seq !== playSeq) return 'EXPIRED';
+      if (r.code === 200 && r.data && r.data.url) return r;
+      throw new Error(r.message || '解析失败');       // 业务失败同样计入重试
+    } catch (e) {
+      if (seq !== playSeq) return 'EXPIRED';
+      if (attempt >= URL_MAX_RETRY) return 'FAILED';
+      if (onRetry) onRetry(attempt);
+    }
+  }
+  return 'FAILED';
+}
+
+/* 回滚到切换前的歌曲：恢复高亮/信息/校准并续播（audio.src 未被覆盖，原地 resume） */
+function rollbackPlayback(prev) {
+  if (!prev) return;
+  state.song = prev.song; state.songIndex = prev.index; state.playList = prev.plist;
+  document.querySelectorAll('#resultBody .song').forEach(el => el.classList.remove('playing'));
+  const row = $(`song-${prev.song.songmid}`);
+  if (row) row.classList.add('playing');
+  setPlayerLine($('nowName'), esc(prev.song.name));
+  setPlayerLine($('nowArtist'), esc(`${prev.song.singer} · ${prev.song.albumName || ''}`.replace(/·\s*$/, '').trim() || prev.song.singer));
+  setBgCover(prev.song.img);
+  loadSongCal();
+  const a = $('audio');
+  if (a.src) a.play().catch(() => { });
+}
+
 async function play(i, list) {
   const src = list || state.list;
   const song = src[i];
   if (!song) return;
   const seq = ++playSeq;          // 领取本次播放序号
+  // ═══ 回滚点：记录切换前的播放状态（总失败时恢复） ═══
+  const prev = (state.song && state.song.songmid !== song.songmid)
+    ? { song: state.song, index: state.songIndex, plist: state.playList } : null;
   state.song = song;
   state.songIndex = i;
   state.playList = src;   // 记住当前播放来源列表(供自动连播使用)
@@ -2972,13 +3021,28 @@ async function play(i, list) {
   setBgCover(song.img);   // 官方接口返回的专辑封面 → 页面底层模糊背景
   loadSongCal();          // 载入这首歌的用户校准值(按 songmid 记忆)
   checkMv(song, seq);     // 异步检测该曲是否有官方 MV → 显示/隐藏 MV 标签
+  toast(`正在加载「${song.name}」…`, 'info', 2000);   // 切歌即时反馈(官方/VIP兑底统一生效)
   try {
-    const r = await api(`/api/url?songmid=${song.songmid}&quality=${QUALITY}`);
-    if (seq !== playSeq) return;                    // 过期响应:用户已切歌,丢弃
+    const res = await fetchUrlWithRetry(song, seq, (attempt) => {
+      if (seq === playSeq) {
+        setPlayerLine($('nowName'), `加载中(${attempt}/${URL_MAX_RETRY})… ${esc(song.name)}`);
+        toast(`响应超时，自动重试 ${attempt}/${URL_MAX_RETRY - 1}`, 'warn', 1500);
+      }
+    });
+    if (res === 'EXPIRED') return;                  // 过期响应:用户已切歌,丢弃
+    if (res === 'FAILED') {                         // 三次均失败:提示 + 回滚上一曲
+      setPlayerLine($('nowName'), '网络较差');
+      setPlayerLine($('nowArtist'), '稍后重新尝试');
+      toast('当前网络环境较差，稍后重新尝试', 'error', 3000);
+      rollbackPlayback(prev);
+      return;
+    }
+    const r = res;
     if (r.code !== 200) {
       setPlayerLine($('nowName'), '播放失败');
       setPlayerLine($('nowArtist'), esc(r.message || ''));
       toast(`播放失败: ${r.message}`, 'error');
+      rollbackPlayback(prev);
       return;
     }
     const viaTag = r.data.via === 'toubiec' ? '<span class="tag3rd">VIP</span>' : '';
@@ -2990,6 +3054,7 @@ async function play(i, list) {
     if (seq !== playSeq) return;
     setPlayerLine($('nowName'), '播放失败');
     toast('播放失败', 'error');
+    rollbackPlayback(prev);
   }
   if (seq === playSeq) loadLyric(song, seq);
 }
