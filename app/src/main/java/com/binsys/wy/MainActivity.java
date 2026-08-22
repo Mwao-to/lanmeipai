@@ -28,13 +28,17 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.RandomAccessFile;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLDecoder;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -248,25 +252,52 @@ public class MainActivity extends Activity {
 
     /** 预分配文件大小(多线程随机写的前提)。 */
     private void preAllocate(Context self, Uri mediaUri, File legacy, long total) throws Exception {
-        if (mediaUri != null) {
-            try (ParcelFileDescriptor pfd = self.getContentResolver().openFileDescriptor(mediaUri, "rw");
-                 RandomAccessFile rf = new RandomAccessFile(pfd.getFileDescriptor(), "rw")) {
-                rf.setLength(total);
-            }
-        } else {
-            try (RandomAccessFile rf = new RandomAccessFile(legacy, "rw")) {
-                rf.setLength(total);
-            }
+        try (RandWriter w = new RandWriter(self, mediaUri, legacy)) {
+            w.setLength(total);
         }
     }
 
-    /** 打开整文件随机写通道(Q+ 经 MediaStore fd,<Q 直写文件)。 */
-    private RandomAccessFile openRandom(Context self, Uri mediaUri, File legacy) throws Exception {
-        if (mediaUri != null) {
-            ParcelFileDescriptor pfd = self.getContentResolver().openFileDescriptor(mediaUri, "rw");
-            return new RandomAccessFile(pfd.getFileDescriptor(), "rw");
+    /**
+     * 统一随机写句柄:Q+ 经 MediaStore fd 用 FileOutputStream+FileChannel 定位写
+     * (基于已有 fd 不截断、各线程独立 fd 互不干扰);<Q 直写 RandomAccessFile。
+     */
+    private static final class RandWriter implements AutoCloseable {
+        private final ParcelFileDescriptor pfd;
+        private final FileOutputStream fos;
+        private final RandomAccessFile raf;
+        private final FileChannel ch;
+
+        RandWriter(Context self, Uri mediaUri, File legacy) throws Exception {
+            if (mediaUri != null) {
+                pfd = self.getContentResolver().openFileDescriptor(mediaUri, "rw");
+                fos = new FileOutputStream(pfd.getFileDescriptor());   // 基于已有 fd,不截断
+                raf = null;
+                ch = fos.getChannel();
+            } else {
+                pfd = null;
+                fos = null;
+                raf = new RandomAccessFile(legacy, "rw");
+                ch = raf.getChannel();
+            }
         }
-        return new RandomAccessFile(legacy, "rw");
+
+        void writeAt(long pos, byte[] buf, int off, int len) throws Exception {
+            ch.position(pos);
+            ch.write(ByteBuffer.wrap(buf, off, len));
+        }
+
+        void setLength(long total) throws Exception {
+            if (raf != null) { raf.setLength(total); return; }
+            ch.position(total - 1);
+            ch.write(ByteBuffer.wrap(new byte[1]));   // 写末尾字节扩展到 total
+        }
+
+        @Override public void close() {
+            try { ch.close(); } catch (Exception ignored) { }
+            try { if (fos != null) fos.close(); } catch (Exception ignored) { }
+            try { if (pfd != null) pfd.close(); } catch (Exception ignored) { }
+            try { if (raf != null) raf.close(); } catch (Exception ignored) { }
+        }
     }
 
     /** 单线程顺序下载(Range 不可用/小文件兜底)。 */
@@ -279,17 +310,16 @@ public class MainActivity extends Activity {
         int code = c.getResponseCode();
         if (code / 100 != 2) throw new IOException("HTTP " + code);
         InputStream in = c.getInputStream();
-        RandomAccessFile rf = openRandom(self, mediaUri, legacy);
-        try {
-            rf.seek(0);
+        try (RandWriter w = new RandWriter(self, mediaUri, legacy)) {
+            long p = 0;
             byte[] buf = new byte[64 * 1024];
             int n;
             while ((n = in.read(buf)) > 0) {
-                rf.write(buf, 0, n);
+                w.writeAt(p, buf, 0, n);
+                p += n;
                 done.addAndGet(n);
             }
         } finally {
-            try { rf.close(); } catch (Exception ignored) { }
             try { in.close(); } catch (Exception ignored) { }
             c.disconnect();
         }
@@ -312,10 +342,9 @@ public class MainActivity extends Activity {
             pool.execute(() -> {
                 Exception lastErr = null;
                 int retry = 3;
+                RandWriter w = null;
                 while (retry-- > 0 && errors.isEmpty()) {       // 其它线程已失败则尽早放弃
                     HttpURLConnection c = null;
-                    RandomAccessFile rf = null;
-                    ParcelFileDescriptor pfd = null;
                     InputStream in = null;
                     try {
                         long p = pos.get(idx);
@@ -327,23 +356,22 @@ public class MainActivity extends Activity {
                         int code = c.getResponseCode();
                         if (code != 206) throw new IOException("分块响应异常 HTTP " + code);
                         in = c.getInputStream();
-                        rf = openRandom(self, mediaUri, legacy);
-                        rf.seek(p);
+                        w = new RandWriter(self, mediaUri, legacy);
                         byte[] buf = new byte[64 * 1024];
                         int n;
                         while ((n = in.read(buf)) > 0 && errors.isEmpty()) {
-                            rf.write(buf, 0, n);
+                            w.writeAt(p, buf, 0, n);
                             p += n;
                             pos.set(idx, p);
                             done.addAndGet(n);
                         }
+                        w.close(); w = null;
                         if (pos.get(idx) >= end) return;         // 本段完成
                         throw new IOException("连接提前中断");
                     } catch (Exception e) {
                         lastErr = e;
                     } finally {
-                        try { if (rf != null) rf.close(); } catch (Exception ignored) { }
-                        try { if (pfd != null) pfd.close(); } catch (Exception ignored) { }
+                        if (w != null) { try { w.close(); } catch (Exception ignored) { } }
                         try { if (in != null) in.close(); } catch (Exception ignored) { }
                         if (c != null) c.disconnect();
                     }
