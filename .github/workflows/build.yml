@@ -20,11 +20,37 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # ═══ 业务核心保护流水线 ═══
+      # 用真实 Python 3.8 编译业务源码为字节码 → AES-256 加密 → assets/core.bin
+      - name: Set up Python 3.8 (bytecode compiler)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+
+      - name: Encrypt core bytecode → assets/core.bin
+        env:
+          CORE_KEY: "0aa70d07121b452d567eb6af8053d586b9187fd21b655d7ada39fd1b2917ced2"
+          CORE_IV: "927f2fab9174d8eac24b57f7eb2bd2ed"
+        run: |
+          cd app/corepkg
+          python3 - <<'PY'
+          import py_compile, sys
+          assert sys.version_info[:2] == (3, 8), "必须用 Python 3.8 生成字节码,当前: %s" % (sys.version_info[:2],)
+          py_compile.compile('src/main_app.py', 'core.pyc', doraise=True)
+          data = open('core.pyc', 'rb').read()
+          assert data[:4] == bytes([0x55, 0x0d, 0x0d, 0x0a]), "非 3.8 字节码魔数"
+          open('core.marshal', 'wb').write(data[16:])   # 去掉 16 字节 pyc 头,仅保留 marshal 体
+          print("✓ 字节码生成:", len(data[16:]), "字节")
+          PY
+          mkdir -p ../main/assets
+          openssl enc -aes-256-cbc -K "$CORE_KEY" -iv "$CORE_IV" -in core.marshal -out ../main/assets/core.bin
+          rm -f core.pyc core.marshal
+          echo "✓ core.bin: $(stat -c%s ../main/assets/core.bin) 字节(AES-256-CBC)"
+
       - name: Set up Gradle 8.2
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.2'
-
 
       - name: Build arm64 release APK
         run: gradle :app:assembleRelease --no-daemon --stacktrace

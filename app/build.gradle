@@ -16,13 +16,10 @@ android {
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
-            // wyapp-core:业务核心(main_app.py)经 Cython 编译为 C 扩展,
-            // 构建期由 Chaquopy 自动用 NDK 交叉编译为 arm64 原生机器码 ——
-            // APK 内不存在任何业务 .py/.pyc 明文,无法被字节码反编译
+            // (业务核心 main_app 不在此处:以加密字节码形式由 CI 注入 assets/core.bin)
             pip {
                 install 'flask'
                 install 'requests'
-                install 'corepkg/dist/wyapp_core-1.0.tar.gz'
             }
         }
     }

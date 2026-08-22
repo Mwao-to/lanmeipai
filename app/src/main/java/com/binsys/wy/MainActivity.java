@@ -28,6 +28,10 @@ import android.widget.Toast;
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
@@ -171,14 +175,54 @@ public class MainActivity extends Activity {
                     // 同一进程内二次进入:Python 已初始化过会抛异常,复用现有实例即可
                     Dbg.w(self, "[py] Python 已初始化(进程复用): " + dup.getMessage());
                 }
+                // 装载加密业务核心:Java 解密 → 内存字节码注入(无明文落盘)
+                byte[] coreCode = unwrapCore();
+                Python.getInstance().getModule("pyloader").callAttr("install", coreCode);
                 Python.getInstance().getModule("main_app");    // 预热导入(flask/requests 等)
-                Dbg.w(self, "[py] Python 就绪(无端口模式)");
+                Dbg.w(self, "[py] Python 就绪(无端口模式,核心已装载 " + coreCode.length + "B)");
                 postJs("window.onServerReady && window.onServerReady()");   // 触发数据补载
             } catch (Throwable t) {
                 Dbg.w(self, "‼️ [py] 初始化失败", t);
                 uiToast("服务初始化失败,详见 debug.log");
             }
         }, "py-init").start();
+    }
+
+    /*
+     * ═══ 业务核心解密(AES-256-CBC) ═══
+     * 密钥不整段出现在常量池:拆成 3 个分片,各自与掩码异或存储,
+     * 运行时拼装。R8 混淆后逆向者需同时理解分片/掩码/拼装逻辑才能还原。
+     * core.bin 由 CI 构建期加密生成(明文字节码从未进入仓库/APK)。
+     */
+    private static final int[] C1 = {-21, 81, 49, -65, 11, -53, 105, 100, -20, 61, -77, -69, 89, -70, -75, 103};
+    private static final int[] C1M = {-31, -10, 60, -72, 25, -48, 44, 73, -70, 67, 5, 20, -39, -23, 96, -31};
+    private static final int[] C2 = {126, -122, 52, 17, -104, -64, 87, 127, 0, -12, 63, 106, 74, -98, -1, 34};
+    private static final int[] C2M = {-57, -98, 75, -61, -125, -91, 10, 5, -38, -51, -62, 113, 99, -119, 49, -16};
+    private static final int[] C9 = {-100, -71, -107, -37, -9, -107, 100, 88, -8, -95, 70, 90, -109, 8, 90, 20};
+    private static final int[] C9M = {14, -58, -70, 112, 102, -31, -68, -78, 58, -22, 17, -83, 120, 35, -120, -7};
+
+    private static byte[] reveal(int[] masked, int[] mask) {
+        byte[] out = new byte[masked.length];
+        for (int i = 0; i < masked.length; i++) out[i] = (byte) (masked[i] ^ mask[i]);
+        return out;
+    }
+
+    /** 解密并返回内存中的业务核心字节码(去掉 pyc 头的 marshal 数据)。 */
+    private byte[] unwrapCore() throws Exception {
+        byte[] key = new byte[32];
+        System.arraycopy(reveal(C1, C1M), 0, key, 0, 16);
+        System.arraycopy(reveal(C2, C2M), 0, key, 16, 16);
+        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        cipher.init(Cipher.DECRYPT_MODE,
+                new SecretKeySpec(key, "AES"),
+                new IvParameterSpec(reveal(C9, C9M)));
+        ByteArrayOutputStream blob = new ByteArrayOutputStream();
+        try (InputStream is = getAssets().open("core.bin")) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) > 0) blob.write(buf, 0, n);
+        }
+        return cipher.doFinal(blob.toByteArray());
     }
 
     /** 从内置 assets 读取文本文件(构建期由 syncEmbeddedHtml 任务从 main_app.py 同步)。 */
