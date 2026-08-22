@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 2
-        versionName '1.1.0'   // 单文件版:全部后端+内嵌 HTML,零文件系统依赖
+        versionCode 3
+        versionName '1.2.0'   // 诊断版:全链路日志落盘
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

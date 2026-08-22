@@ -9,6 +9,8 @@ import android.os.Environment;
 import android.util.Log;
 import android.webkit.CookieManager;
 import android.webkit.URLUtil;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -31,56 +33,82 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Dbg.w(this, "═══ onCreate 进入 ═══");
+        // 全局未捕获异常也落盘(定位闪退)
+        final Context self = this;
+        Thread.setDefaultUncaughtExceptionHandler((t, e) -> {
+            Dbg.w(self, "‼️ 未捕获异常 thread=" + t.getName(), e);
+            Log.e(TAG, "uncaught", e);
+            android.os.Process.killProcess(android.os.Process.myPid());
+        });
+
         setContentView(R.layout.activity_main);
         web = findViewById(R.id.web);
 
         WebSettings st = web.getSettings();
         st.setJavaScriptEnabled(true);
-        st.setDomStorageEnabled(true);                       // localStorage(歌词校准/跑马灯开关)
+        st.setDomStorageEnabled(true);
         st.setAllowFileAccess(true);
         st.setMediaPlaybackRequiresUserGesture(false);
         st.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-        web.setWebViewClient(new WebViewClient());
-        // 所有 <a download> 触发的下载交给系统下载管理器(保存到公共 Download 目录)
+        web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(java.lang.String url, android.graphics.Bitmap f) {
+                Dbg.w(self, "WebView onPageStarted: " + url);
+            }
+            @Override public void onPageFinished(java.lang.String url) {
+                Dbg.w(self, "WebView onPageFinished: " + url);
+            }
+            @Override public void onReceivedError(WebResourceRequest rq, WebResourceError er) {
+                Dbg.w(self, "WebView 错误: " + rq.getUrl() + " " + er.getDescription());
+            }
+        });
         web.setDownloadListener(this::onDownload);
 
-        // 先显示启动画面,服务就绪后自动切换到主界面
-        web.loadData("<html><body style='background:#1e1e20;display:flex;align-items:center;justify-content:center;height:90vh'>"
-            + "<p style='color:#8ab4f8;font-family:sans-serif;font-size:18px'>蓝莓派启动中…</p></body></html>",
-            "text/html", "utf-8");
+        // 启动画面:立即可见,用于区分「WebView 层」与「Python 层」故障
+        web.loadData("<html><body style='background:#1e1e20;display:flex;align-items:center;"
+            + "justify-content:center;height:90vh'><p style='color:#8ab4f8;font-family:sans-serif;"
+            + "font-size:18px'>蓝莓派启动中…</p></body></html>", "text/html", "utf-8");
+        Dbg.w(this, "启动画面已设置");
 
         startServerThenLoad();
+        Dbg.w(this, "onCreate 完成");
     }
 
     private void startServerThenLoad() {
-        // 线程A:启动内嵌 Python/Flask 服务(callAttr 阻塞直到服务停止)
+        final Context self = this;
         new Thread(() -> {
+            Dbg.w(self, "[py] 线程启动,准备初始化 Python…");
             try {
-                Python.getInstance().getModule("server_launcher").callAttr("start");
+                Python py = Python.getInstance();
+                Dbg.w(self, "[py] Python 已初始化: " + py.getVersion());
+                py.getModule("main_app").callAttr("start");   // 阻塞直到服务停止
+                Dbg.w(self, "[py] start() 已返回(Flask 服务退出)");
             } catch (Throwable t) {
-                Log.e(TAG, "python server crashed", t);
+                Dbg.w(self, "‼️ [py] 服务启动失败", t);
             }
         }, "py-server").start();
 
-        // 线程B:轮询端口就绪后再加载页面
         new Thread(() -> {
-            for (int i = 0; i < 120; i++) {
+            for (int i = 1; i <= 120; i++) {
                 try (Socket s = new Socket()) {
                     s.connect(new InetSocketAddress("127.0.0.1", 5000), 500);
+                    Dbg.w(self, "[poll] 第" + i + "次探测成功,加载页面");
                     runOnUiThread(() -> {
                         if (!pageLoaded) { pageLoaded = true; web.loadUrl(PAGE); }
                     });
                     return;
-                } catch (IOException ignore) { }
+                } catch (IOException e) {
+                    if (i == 1 || i % 10 == 0) Dbg.w(self, "[poll] 第" + i + "次探测失败(服务未就绪)");
+                }
                 try { Thread.sleep(500); } catch (InterruptedException e) { return; }
             }
+            Dbg.w(self, "‼️ [poll] 60 秒超时,服务始终未监听 5000");
             runOnUiThread(() -> web.loadData(
-                "<h3 style='font-family:sans-serif;color:#e33'>服务启动失败,请重启应用</h3>",
+                "<h3 style='font-family:sans-serif;color:#e33'>服务启动失败,详见 debug.log</h3>",
                 "text/html", "utf-8"));
         }, "port-wait").start();
     }
 
-    /** 系统下载管理器:文件名优先取 Content-Disposition(与页面提示一致),存到公共 Download */
     private void onDownload(String url, String ua, String disposition, String mime, long len) {
         try {
             String name = guessName(url, disposition);
@@ -96,7 +124,7 @@ public class MainActivity extends Activity {
             DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
             dm.enqueue(req);
         } catch (Throwable t) {
-            Log.e(TAG, "download failed", t);
+            Dbg.w(this, "下载失败", t);
         }
     }
 
