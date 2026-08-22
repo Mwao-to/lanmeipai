@@ -109,7 +109,6 @@ public class MainActivity extends Activity {
      */
     private void startPythonInit() {
         final Context self = this;
-        toast(self, "蓝莓派启动中…");
         new Thread(() -> {
             try {
                 try {
@@ -121,7 +120,6 @@ public class MainActivity extends Activity {
                 Python.getInstance().getModule("main_app");    // 预热导入(flask/requests 等)
                 Dbg.w(self, "[py] Python 就绪(无端口模式)");
                 postJs("window.onServerReady && window.onServerReady()");   // 触发数据补载
-                runOnUiThread(() -> toast(self, "✓ 启动完成"));
             } catch (Throwable t) {
                 Dbg.w(self, "‼️ [py] 初始化失败", t);
                 uiToast("服务初始化失败,详见 debug.log");
@@ -202,7 +200,7 @@ public class MainActivity extends Activity {
         try {
             DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
             req.setTitle(filename);
-            req.setDescription("蓝莓派下载");
+            req.setDescription("网易云下载器");
             req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
             req.addRequestHeader("User-Agent", "Mozilla/5.0");
@@ -287,7 +285,7 @@ public class MainActivity extends Activity {
             DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
             req.setMimeType(mime);
             req.setTitle(name);
-            req.setDescription("蓝莓派下载");
+            req.setDescription("网易云下载器");
             req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name);
             String ck = CookieManager.getInstance().getCookie(url);

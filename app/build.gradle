@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 11
-        versionName '1.7.1'   // 极速启动:界面从 assets 毫秒级渲染(构建期自动同步),返回键直接退出
+        versionCode 12
+        versionName '2.0'   // 品牌:网易云下载器 + 全局红色配色
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

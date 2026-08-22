@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""蓝莓派单文件版:全部后端逻辑 + 内嵌 HTML 界面(供 Chaquopy 打包,零文件系统依赖)"""
+"""网易云下载器单文件版:全部后端逻辑 + 内嵌 HTML 界面(供 Chaquopy 打包,零文件系统依赖)"""
 
 # ════════ wyapi/log.py ════════
 # -*- coding: utf-8 -*-
@@ -2000,7 +2000,7 @@ def start():
     cookie = os.environ.get('WY_COOKIE', '')
     if cookie:
         set_wy_cookie(cookie)
-    print('蓝莓派 Web 服务启动: http://127.0.0.1:5000')
+    print('网易云下载器 Web 服务启动: http://127.0.0.1:5000')
     app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
 
 
@@ -2042,21 +2042,21 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>蓝莓派 - 播放器</title>
+<title>网易云-播放/下载器</title>
 <style>
   /* ============ VS Code 主题变量 ============ */
   :root {
     --bg: #1e1e1e;            /* 编辑器背景 */
     --bg-panel: #252526;      /* 面板背景 */
     --bg-hover: #2a2d2e;      /* 悬停 */
-    --bg-active: #04395e;     /* 选中行背景 */
+    --bg-active: #3d1414;     /* 选中行背景(暗红) */
     --bg-input: #3c3c3c;
     --border: #3c3c3c;
     --text: #cccccc;
     --text-bright: #ffffff;
     --muted: #858585;
-    --accent: #007acc;        /* VS Code 蓝 */
-    --accent-hover: #3794ff;
+    --accent: #c20c0c;        /* 网易云红 */
+    --accent-hover: #ec4141;
     --green: #89d185;
     --red: #f48771;
     --yellow: #cca700;
@@ -2093,13 +2093,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .container { max-width:960px; margin:0 auto; padding:16px 18px; }
 
   /* ============ 顶栏 ============ */
-  header { display:flex; align-items:center; gap:14px; padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:14px; }
-  .logo {
-    width:38px; height:38px; border-radius:var(--radius); flex-shrink:0;
-    background:linear-gradient(135deg,#007acc,#1d4c8f);
-    display:flex; align-items:center; justify-content:center;
-    color:#fff; font-size:21px; font-weight:bold; box-shadow:0 2px 8px rgba(0,122,204,.35);
-  }
+  header { padding-bottom:14px; border-bottom:1px solid var(--border); margin-bottom:14px; }
   h1 { font-size:16px; font-weight:600; color:var(--text-bright); letter-spacing:.3px; }
   h1 .sub { display:block; font-size:10.5px; color:var(--muted); font-weight:400; margin-top:2px; font-family:var(--mono); }
 
@@ -2118,8 +2112,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     background:var(--accent); color:#fff; font-size:13px; font-weight:500;
     transition:background .15s; user-select:none; white-space:nowrap;
   }
-  .btn:hover { background:var(--accent-hover); }
-  .btn:active { transform:translateY(1px); }
+  .btn:hover { background:var(--accent-hover); }  .btn:active { transform:translateY(1px); }
 
   /* ============ 网易云热门歌曲(15首) ============ */
   .hot { margin-bottom:12px; }
@@ -2135,7 +2128,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     transition:all .15s; background:rgba(60,60,60,var(--glass-alpha)); font-family:inherit;
     max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
   }
-  .chip:hover { color:var(--accent-hover); border-color:var(--accent); background:rgba(0,122,204,.25); }
+  .chip:hover { color:var(--accent-hover); border-color:var(--accent); background:rgba(194,12,12,.25); }
   .chip .n { color:var(--accent-hover); margin-right:3px; font-family:var(--mono); font-size:10px; }
 
   /* ============ 双栏布局:左歌词 / 右搜索结果(等权重) ============ */
@@ -2181,7 +2174,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   .lyrics div.active {
     color:var(--text-bright); transform:translateX(4px);
-    background:linear-gradient(90deg, rgba(0,122,204,.18), transparent);
+    background:linear-gradient(90deg, rgba(194,12,12,.18), transparent);
     border-left:2px solid var(--accent);
   }
 
@@ -2233,7 +2226,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .p-progress { display:flex; align-items:center; gap:8px; flex-shrink:0; width:42%; min-width:120px; cursor:pointer; }
   .p-bar { flex:1; height:4px; background:#3c3c3c; border-radius:2px; overflow:hidden; }
   .p-fill { height:100%; width:0%; background:var(--accent); border-radius:2px; transition:width .2s linear; position:relative; }
-  .p-fill::after { content:""; position:absolute; right:-4px; top:50%; width:9px; height:9px; margin-top:-4.5px; border-radius:50%; background:var(--accent-hover); box-shadow:0 0 6px rgba(55,148,255,.8); }
+  .p-fill::after { content:""; position:absolute; right:-4px; top:50%; width:9px; height:9px; margin-top:-4.5px; border-radius:50%; background:var(--accent-hover); box-shadow:0 0 6px rgba(236,65,65,.8); }
   .p-time { font-family:var(--mono); font-size:10.5px; color:var(--muted); white-space:nowrap; }
 
   /* ============ 下载标签按钮 + 居中弹窗 ============ */
@@ -2245,7 +2238,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     transition:all .15s; user-select:none;
     box-sizing:border-box; line-height:1.4;
   }
-  .dl-tag:hover { border-color:var(--accent); background:rgba(0,122,204,.08); }
+  .dl-tag:hover { border-color:var(--accent); background:rgba(194,12,12,.08); }
   .dl-tag:active { transform:translateY(1px); }
   /* MV 弹窗视频播放器(严格限制在弹窗内) */
   #mvModal .modal-box { width:min(340px, 88vw); }
@@ -2348,9 +2341,8 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 <div id="bgCover"></div>
 <div class="container">
   <header>
-    <div class="logo">♪</div>
-    <h1>蓝莓派 - 播放器
-      <span class="sub">NETEASE MUSIC · binsys >> 蓝莓派</span>
+    <h1>网易云-播放/下载器
+      <span class="sub">NETEASE MUSIC · by:binsys蓝莓派</span>
     </h1>
   </header>
 
@@ -2625,7 +2617,7 @@ window.addEventListener('resize', () => {
 let mqEnabled = true;
 function applyMqState() {
   const btn = $('mqToggle');
-  btn.style.color = mqEnabled ? 'var(--accent)' : 'var(--text-bright)';        // 开=蓝(与列表选中同色) 关=白
+  btn.style.color = mqEnabled ? 'var(--accent)' : 'var(--text-bright)';        // 开=红(与列表选中同色) 关=白
   btn.style.borderColor = mqEnabled ? 'var(--accent)' : 'var(--border)';
   document.querySelectorAll('#resultBody .track').forEach(t => t.classList.remove('marquee'));
   if (mqEnabled) setupMarquees();          // 开启:重新测量并恢复滚动动画
