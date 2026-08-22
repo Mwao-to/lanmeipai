@@ -2309,7 +2309,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .toast.success .toast-icon { color:var(--green); }
   .toast.warn .toast-icon { color:var(--yellow); }
   .toast.error .toast-icon { color:var(--red); }
-  .toast .toast-msg { flex:1; min-width:0; }
+  .toast .toast-msg { flex:1; min-width:0; white-space:pre-line; }
   .toast .toast-close { background:none; border:none; color:var(--muted); cursor:pointer; font-size:15px; padding:0 2px; line-height:1; flex-shrink:0; }
   .toast .toast-close:hover { color:var(--text-bright); }
   .toast.hide { opacity:0; transform:translateX(20px); transition:all .25s; }
@@ -2465,6 +2465,20 @@ window.__onApiResult = (id, status, body) => {
   const p = _pending[id]; if (!p) return;           // 过期/超时结果丢弃
   delete _pending[id]; clearTimeout(p.timer);
   try { p.resolve(JSON.parse(body)); } catch (e) { p.reject(new Error('响应解析失败')); }
+};
+
+/* ============ 内置 12 线程下载器事件:开始/进度/完成(含保存路径)/失败 ============
+ * 所有下载统一落盘到 公共Download/网易云下载器/ 文件夹,
+ * 完成后在此弹窗展示完整保存路径,让用户知道文件在哪。 */
+window.__onDownloadEvent = (status, filename, detail) => {
+  if (status === 'start') toast(`开始下载「${filename}」(12 线程)`, 'info');
+  else if (status === 'progress') {
+    if (detail % 25 === 0) toast(`${filename} 已下载 ${detail}%`, 'info', 1200);
+  } else if (status === 'done') {
+    toast(`「${filename}」下载完成\n已保存到:${detail}`, 'success', 10000);
+  } else if (status === 'error') {
+    toast(`下载失败「${filename}」:${detail}`, 'error', 6000);
+  }
 };
 function fmtTime(s) { if (!isFinite(s) || s <= 0) return '00:00'; s = Math.floor(s); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
 
@@ -2792,7 +2806,7 @@ async function play(i, list) {
     setPlayerLine($('nowName'), `${esc(song.name)}${viaTag}`);   // 歌名+VIP标签作为整体跑马灯
     if (r.data.via === 'toubiec') toast(`已通过VIP通道解析播放「${song.name}」`, 'warn', 3000);
     audio.src = r.data.url;
-    audio.play().catch(() => toast('点击播放按钮开始播放(浏览器拦截自动播放)', 'info', 3000));
+    audio.play().catch(() => { });   // 自动播放被拦截时静默,用户手动点击播放即可
   } catch (e) {
     if (seq !== playSeq) return;
     setPlayerLine($('nowName'), '播放失败');
@@ -2874,7 +2888,6 @@ async function downloadSong() {
     // 无端口模式:直链交给原生 DownloadManager(文件名由 App 精确控制,
     // 不再依赖同源代理与 Content-Disposition 防止后缀错乱)
     nativeDownload(filename, r.data.url);
-    toast(`开始下载「${filename}」`, 'success');
   } catch (e) {
     toast('下载请求失败', 'error');
   }
@@ -2896,8 +2909,7 @@ async function downloadLyric() {
     const tlyric = ((d.tlyric) || '').trim();
     if (tlyric) content += '\n\n' + tlyric;
     const filename = `${safeName(s.name)}-${safeName(s.singer)}.lrc`;
-    saveTextFile(filename, content);
-    toast(`已保存「${filename}」`, 'success');
+    saveTextFile(filename, content);                    // 完成后由原生事件弹窗提示路径
   } catch (e) {
     toast('歌词下载失败', 'error');
   }
@@ -2957,8 +2969,7 @@ async function downloadMv() {
   try {
     const r = await api(`/api/mv/url?mvid=${mvState.mvid}`);
     if (r.code !== 200 || !r.data || !r.data.url) { toast(`MV 解析失败: ${r.message || '未知错误'}`, 'error'); return; }
-    nativeDownload(filename, r.data.url);               // 原生 DownloadManager 直链下载
-    toast('已开始下载 MV', 'success');
+    nativeDownload(filename, r.data.url);               // 完成后由原生事件弹窗提示路径
   } catch (e) {
     toast('MV 下载失败', 'error');
   }

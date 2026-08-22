@@ -2,16 +2,16 @@ package com.binsys.wy;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.DownloadManager;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
-import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.URLUtil;
 import android.webkit.WebResourceError;
@@ -31,10 +31,19 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,6 +52,14 @@ public class MainActivity extends Activity {
     /** 仅作为页面源(origin):保持 localStorage 与历史版本互通。无任何服务监听此地址 */
     private static final String BASE_URL = "http://127.0.0.1:5000/";
     private static final int REQ_WRITE = 42;
+
+    /** ═══ 内置下载器:wget 式 12 线程 Range 分块并发,统一落盘目录 ═══ */
+    private static final int DL_THREADS = 12;
+    /** MediaStore 相对路径(物理路径即 /storage/emulated/0/Download/网易云下载器/) */
+    private static final String DL_SUBDIR = Environment.DIRECTORY_DOWNLOADS + "/网易云下载器";
+    /** <Q 设备的物理路径 */
+    private static final File DL_LEGACY_DIR =
+        new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "网易云下载器");
 
     private WebView web;
     /** JS→Python 桥的调用线程池(每次 API 调用一个任务,互不阻塞) */
@@ -90,7 +107,8 @@ public class MainActivity extends Activity {
                 Dbg.w(self, "WebView 错误: " + rq.getUrl() + " " + er.getDescription());
             }
         });
-        web.setDownloadListener(this::onDownload);
+        web.setDownloadListener((url, ua, disposition, mime, len)
+            -> internalDownload(guessName(url, disposition), url));
 
         // 界面从内置 assets 即时渲染(毫秒级):
         // 没有启动画面、没有二次切换、没有多余历史记录 —— 打开即真界面。
@@ -104,7 +122,7 @@ public class MainActivity extends Activity {
 
     /**
      * 后台初始化 Python(无端口架构):没有 Flask 服务线程、没有端口监听,
-     * 模块加载完成即后端就绪 → 回调前端补数据 + Toast 提示。
+     * 模块加载完成即后端就绪 → 回调前端补数据。
      * 就绪前的桥调用会安全返回业务错误,由前端自动重试,无需任何锁等待。
      */
     private void startPythonInit() {
@@ -183,68 +201,331 @@ public class MainActivity extends Activity {
             });
         }
 
-        /** 大文件(歌曲/MV)直链下载:系统 DownloadManager,带通知栏进度。 */
+        /** 大文件(歌曲/MV):内置 12 线程下载器直链下载到 公共Download/网易云下载器/ */
         @JavascriptInterface
         public void download(String filename, String url) {
-            nativeDownload(filename, url);
+            internalDownload(filename, url);
         }
 
-        /** 小文本(歌词)写入公共 Download 目录。 */
+        /** 小文本(歌词):写入同一目录 */
         @JavascriptInterface
         public void downloadText(String filename, String content) {
             saveTextToDownloads(filename, content);
         }
     }
 
-    private void nativeDownload(String filename, String url) {
-        try {
-            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-            req.setTitle(filename);
-            req.setDescription("网易云下载器");
-            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, filename);
-            req.addRequestHeader("User-Agent", "Mozilla/5.0");
-            ((DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE)).enqueue(req);
-            Dbg.w(this, "[dl] 已入队: " + filename);
-        } catch (Throwable t) {
-            Dbg.w(this, "‼️ [dl] 下载入队失败: " + filename, t);
-            uiToast("下载失败: " + t.getMessage());
+    /** 向页面派发下载器事件(status: start/progress/done/error)。 */
+    private void dlEvent(String status, String filename, String detail) {
+        postJs("window.__onDownloadEvent && window.__onDownloadEvent("
+            + JSONObject.quote(status) + "," + JSONObject.quote(filename == null ? "" : filename)
+            + "," + JSONObject.quote(detail == null ? "" : detail) + ")");
+    }
+
+    /** 探测目标是否支持 Range 分块(断点续传)并获取总大小,返回 {支持?1:0, 总大小或-1}。 */
+    private static long[] probeUrl(String url) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setRequestProperty("Range", "bytes=0-0");
+        c.setRequestProperty("User-Agent", "Mozilla/5.0");
+        c.setConnectTimeout(10000);
+        c.setReadTimeout(15000);
+        int code = c.getResponseCode();
+        long total = -1;
+        int ranged = 0;
+        String cr = c.getHeaderField("Content-Range");          // 形如 bytes 0-0/5242880
+        if (code == 206 && cr != null && cr.contains("/")) {
+            try {
+                total = Long.parseLong(cr.substring(cr.lastIndexOf('/') + 1).trim());
+                ranged = 1;
+            } catch (Exception ignored) { }
+        } else {
+            String cl = c.getHeaderField("Content-Length");
+            if (cl != null) try { total = Long.parseLong(cl.trim()); } catch (Exception ignored) { }
+        }
+        try { c.getInputStream().close(); } catch (Exception ignored) { }
+        c.disconnect();
+        return new long[]{ranged, total};
+    }
+
+    /** 预分配文件大小(多线程随机写的前提)。 */
+    private void preAllocate(Context self, Uri mediaUri, File legacy, long total) throws Exception {
+        if (mediaUri != null) {
+            try (ParcelFileDescriptor pfd = self.getContentResolver().openFileDescriptor(mediaUri, "rw");
+                 RandomAccessFile rf = new RandomAccessFile(pfd.getFileDescriptor(), "rw")) {
+                rf.setLength(total);
+            }
+        } else {
+            try (RandomAccessFile rf = new RandomAccessFile(legacy, "rw")) {
+                rf.setLength(total);
+            }
         }
     }
 
-    /** 歌词保存:Q+ 走 MediaStore 零权限;<Q 需运行时存储权限(先申请再写)。 */
-    private void saveTextToDownloads(String filename, String content) {
-        try {
-            if (Build.VERSION.SDK_INT >= 29) {
-                ContentValues cv = new ContentValues();
-                cv.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, filename);
-                cv.put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain");
-                Uri uri = getContentResolver().insert(
-                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
-                try (OutputStream os = getContentResolver().openOutputStream(uri)) {
-                    os.write(content.getBytes(StandardCharsets.UTF_8));
-                }
-                Dbg.w(this, "[dl] 歌词已保存(MediaStore): " + filename);
-                uiToast("已保存「" + filename + "」");
-            } else if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                    == PackageManager.PERMISSION_GRANTED) {
-                boolean ok = writeLegacyText(filename, content);
-                uiToast(ok ? "已保存「" + filename + "」" : "保存失败");
-            } else {
-                pendingText[0] = filename; pendingText[1] = content;
-                requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_WRITE);
-            }
-        } catch (Throwable t) {
-            Dbg.w(this, "‼️ [dl] 文本保存失败: " + filename, t);
-            uiToast("保存失败: " + t.getMessage());
+    /** 打开整文件随机写通道(Q+ 经 MediaStore fd,<Q 直写文件)。 */
+    private RandomAccessFile openRandom(Context self, Uri mediaUri, File legacy) throws Exception {
+        if (mediaUri != null) {
+            ParcelFileDescriptor pfd = self.getContentResolver().openFileDescriptor(mediaUri, "rw");
+            return new RandomAccessFile(pfd.getFileDescriptor(), "rw");
         }
+        return new RandomAccessFile(legacy, "rw");
+    }
+
+    /** 单线程顺序下载(Range 不可用/小文件兜底)。 */
+    private void singleThreadDownload(Context self, Uri mediaUri, File legacy,
+                                      String url, AtomicLong done) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        c.setRequestProperty("User-Agent", "Mozilla/5.0");
+        c.setConnectTimeout(10000);
+        c.setReadTimeout(30000);
+        int code = c.getResponseCode();
+        if (code / 100 != 2) throw new IOException("HTTP " + code);
+        InputStream in = c.getInputStream();
+        RandomAccessFile rf = openRandom(self, mediaUri, legacy);
+        try {
+            rf.seek(0);
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                rf.write(buf, 0, n);
+                done.addAndGet(n);
+            }
+        } finally {
+            try { rf.close(); } catch (Exception ignored) { }
+            try { in.close(); } catch (Exception ignored) { }
+            c.disconnect();
+        }
+    }
+
+    /** wget 式多线程分块下载:12 线程各自负责一段 Range,段内断线自动续传(最多重试 3 次)。 */
+    private void multiThreadDownload(Context self, Uri mediaUri, File legacy,
+                                     String url, long total, AtomicLong done) throws Exception {
+        final long seg = total / DL_THREADS;
+        final AtomicLongArray pos = new AtomicLongArray(DL_THREADS);   // 各线程段内当前偏移
+        for (int i = 0; i < DL_THREADS; i++) pos.set(i, i * seg);
+        preAllocate(self, mediaUri, legacy, total);
+
+        final ConcurrentLinkedQueue<Exception> errors = new ConcurrentLinkedQueue<>();
+        final CountDownLatch latch = new CountDownLatch(DL_THREADS);
+        ExecutorService pool = Executors.newFixedThreadPool(DL_THREADS);
+        for (int i = 0; i < DL_THREADS; i++) {
+            final int idx = i;
+            final long end = (i == DL_THREADS - 1) ? total : (i + 1) * seg;
+            pool.execute(() -> {
+                Exception lastErr = null;
+                int retry = 3;
+                while (retry-- > 0 && errors.isEmpty()) {       // 其它线程已失败则尽早放弃
+                    HttpURLConnection c = null;
+                    RandomAccessFile rf = null;
+                    ParcelFileDescriptor pfd = null;
+                    InputStream in = null;
+                    try {
+                        long p = pos.get(idx);
+                        c = (HttpURLConnection) new URL(url).openConnection();
+                        c.setRequestProperty("Range", "bytes=" + p + "-" + (end - 1));
+                        c.setRequestProperty("User-Agent", "Mozilla/5.0");
+                        c.setConnectTimeout(10000);
+                        c.setReadTimeout(30000);
+                        int code = c.getResponseCode();
+                        if (code != 206) throw new IOException("分块响应异常 HTTP " + code);
+                        in = c.getInputStream();
+                        rf = openRandom(self, mediaUri, legacy);
+                        rf.seek(p);
+                        byte[] buf = new byte[64 * 1024];
+                        int n;
+                        while ((n = in.read(buf)) > 0 && errors.isEmpty()) {
+                            rf.write(buf, 0, n);
+                            p += n;
+                            pos.set(idx, p);
+                            done.addAndGet(n);
+                        }
+                        if (pos.get(idx) >= end) return;         // 本段完成
+                        throw new IOException("连接提前中断");
+                    } catch (Exception e) {
+                        lastErr = e;
+                    } finally {
+                        try { if (rf != null) rf.close(); } catch (Exception ignored) { }
+                        try { if (pfd != null) pfd.close(); } catch (Exception ignored) { }
+                        try { if (in != null) in.close(); } catch (Exception ignored) { }
+                        if (c != null) c.disconnect();
+                    }
+                }
+                if (pos.get(idx) < end && lastErr != null) errors.add(lastErr);
+                latch.countDown();
+            });
+        }
+        latch.await();
+        pool.shutdown();
+        if (!errors.isEmpty()) throw errors.peek();
+        if (done.get() != total) throw new java.io.IOException(
+            "完整性校验失败(已下载 " + done.get() + "/" + total + " 字节)");
+    }
+
+    /** 统一下载入口:创建目标文件 → 探测 Range → 12 线程/单线程 → 发布并回传保存路径。 */
+    private void internalDownload(String filename, String url) {
+        final Context self = getApplicationContext();
+        apiPool.execute(() -> {
+            Uri mediaUri = null;
+            File legacy = null;
+            AtomicLong done = new AtomicLong();
+            ScheduledExecutorService prog = Executors.newSingleThreadScheduledExecutor();
+            boolean ok = false;
+            String errMsg = null;
+            try {
+                dlEvent("start", filename, "");
+                // 1. 创建目标文件(Q+ 经 MediaStore 落到 Download/网易云下载器/,<Q 直写路径)
+                if (Build.VERSION.SDK_INT >= 29) {
+                    ContentValues cv = new ContentValues();
+                    cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename);
+                    cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeOf(filename));
+                    cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, DL_SUBDIR);
+                    cv.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1);
+                    mediaUri = self.getContentResolver().insert(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                    if (mediaUri == null) throw new java.io.IOException("创建下载文件失败(存储不可用)");
+                } else {
+                    if (!DL_LEGACY_DIR.exists() && !DL_LEGACY_DIR.mkdirs())
+                        throw new java.io.IOException("创建目录失败:" + DL_LEGACY_DIR);
+                    legacy = uniqueLegacy(new File(DL_LEGACY_DIR, filename));
+                }
+                // 2. 探测 Range 支持与总大小
+                long[] probe = probeUrl(url);
+                final long total = probe[1];
+                // 3. 进度上报(每 500ms 采样,25% 一档提示)
+                final long[] lastPct = {-1};
+                prog.scheduleAtFixedRate(() -> {
+                    if (total <= 0) return;
+                    int pct = (int) (done.get() * 100 / total);
+                    if (pct != lastPct[0] && pct % 25 == 0 && pct > lastPct[0]) {
+                        lastPct[0] = pct;
+                        dlEvent("progress", filename, String.valueOf(pct));
+                    }
+                }, 400, 500, TimeUnit.MILLISECONDS);
+                // 4. 分发下载(大文件且支持 Range → 12 线程;否则单线程兜底)
+                try {
+                    if (probe[0] == 1 && total > 1024 * 1024) {
+                        Dbg.w(self, "[dl] 12 线程下载 " + filename + "(" + total + " 字节)");
+                        multiThreadDownload(self, mediaUri, legacy, url, total, done);
+                    } else {
+                        Dbg.w(self, "[dl] 单线程下载 " + filename + "(range="
+                            + probe[0] + ", size=" + total + ")");
+                        singleThreadDownload(self, mediaUri, legacy, url, done);
+                    }
+                    ok = true;
+                } catch (Throwable firstErr) {
+                    // 多线程失败(如服务器不支持 Range 却返回 200 全量体):
+                    // 重置进度从零单线程重试一次(同目标文件整体覆写)
+                    Dbg.w(self, "[dl] 多线程失败,转单线程重试: " + firstErr);
+                    done.set(0);
+                    singleThreadDownload(self, mediaUri, legacy, url, done);
+                    ok = true;
+                }
+            } catch (Throwable t) {
+                errMsg = t.getMessage() == null ? t.toString() : t.getMessage();
+                Dbg.w(self, "‼️ [dl] " + filename + " 下载失败: " + errMsg, t);
+            } finally {
+                prog.shutdownNow();
+                // 5. 收尾:成功发布文件(IS_PENDING=0)并回传真实路径;失败清理残留
+                String finalPath = null;
+                try {
+                    if (ok && mediaUri != null) {
+                        ContentValues cv = new ContentValues();
+                        cv.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0);
+                        self.getContentResolver().update(mediaUri, cv, null, null);
+                        finalPath = queryDataPath(self, mediaUri);
+                        if (finalPath == null) finalPath = "/" + DL_SUBDIR + "/" + filename;
+                    } else if (ok) {
+                        finalPath = legacy.getAbsolutePath();
+                    }
+                    if (!ok && mediaUri != null) self.getContentResolver().delete(mediaUri, null, null);
+                    if (!ok && legacy != null && legacy.exists()) legacy.delete();
+                } catch (Throwable ignore) { }
+                if (ok) {
+                    Dbg.w(self, "[dl] 完成: " + finalPath);
+                    dlEvent("done", filename, finalPath);
+                } else {
+                    dlEvent("error", filename, errMsg == null ? "未知错误" : errMsg);
+                }
+            }
+        });
+    }
+
+    private static String queryDataPath(Context self, Uri uri) {
+        try (Cursor c = self.getContentResolver().query(uri,
+            new String[]{android.provider.MediaStore.MediaColumns.DATA}, null, null, null)) {
+            if (c != null && c.moveToFirst()) return c.getString(0);
+        } catch (Exception ignored) { }
+        return null;
+    }
+
+    private static String mimeOf(String name) {
+        String n = name.toLowerCase();
+        if (n.endsWith(".mp3")) return "audio/mpeg";
+        if (n.endsWith(".flac")) return "audio/flac";
+        if (n.endsWith(".m4a")) return "audio/mp4";
+        if (n.endsWith(".aac")) return "audio/aac";
+        if (n.endsWith(".mp4")) return "video/mp4";
+        if (n.endsWith(".lrc") || n.endsWith(".txt")) return "text/plain";
+        return "application/octet-stream";
+    }
+
+    /** 同名文件自动加 " (n)" 序号(<Q 无 MediaStore 自动改名)。 */
+    private static File uniqueLegacy(File f) {
+        if (!f.exists()) return f;
+        String n = f.getName();
+        int dot = n.lastIndexOf('.');
+        String base = dot > 0 ? n.substring(0, dot) : n;
+        String ext = dot > 0 ? n.substring(dot) : "";
+        for (int i = 1; i < 999; i++) {
+            File t = new File(f.getParentFile(), base + " (" + i + ")" + ext);
+            if (!t.exists()) return t;
+        }
+        return f;
+    }
+
+    /** 歌词落盘:与歌曲/MV 同一目录 Download/网易云下载器/,完成后同样弹窗回传路径。 */
+    private void saveTextToDownloads(String filename, String content) {
+        final Context self = getApplicationContext();
+        apiPool.execute(() -> {
+            try {
+                String finalPath;
+                if (Build.VERSION.SDK_INT >= 29) {
+                    ContentValues cv = new ContentValues();
+                    cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename);
+                    cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/plain");
+                    cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, DL_SUBDIR);
+                    Uri uri = self.getContentResolver().insert(
+                        android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                    try (OutputStream os = self.getContentResolver().openOutputStream(uri)) {
+                        os.write(content.getBytes(StandardCharsets.UTF_8));
+                    }
+                    finalPath = queryDataPath(self, uri);
+                    if (finalPath == null) finalPath = "/" + DL_SUBDIR + "/" + filename;
+                } else if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                        == PackageManager.PERMISSION_GRANTED) {
+                    if (!DL_LEGACY_DIR.exists() && !DL_LEGACY_DIR.mkdirs())
+                        throw new java.io.IOException("创建目录失败");
+                    File f = uniqueLegacy(new File(DL_LEGACY_DIR, filename));
+                    try (FileOutputStream fo = new FileOutputStream(f)) {
+                        fo.write(content.getBytes(StandardCharsets.UTF_8));
+                    }
+                    finalPath = f.getAbsolutePath();
+                } else {
+                    pendingText[0] = filename; pendingText[1] = content;
+                    requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, REQ_WRITE);
+                    return;
+                }
+                Dbg.w(self, "[dl] 歌词已保存: " + finalPath);
+                dlEvent("done", filename, finalPath);
+            } catch (Throwable t) {
+                Dbg.w(self, "‼️ [dl] 文本保存失败: " + filename, t);
+                dlEvent("error", filename, t.getMessage() == null ? t.toString() : t.getMessage());
+            }
+        });
     }
 
     private boolean writeLegacyText(String filename, String content) {
         try {
-            File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-            if (!dir.exists()) dir.mkdirs();
-            File f = new File(dir, filename);
+            if (!DL_LEGACY_DIR.exists() && !DL_LEGACY_DIR.mkdirs()) return false;
+            File f = uniqueLegacy(new File(DL_LEGACY_DIR, filename));
             try (FileOutputStream fo = new FileOutputStream(f)) {
                 fo.write(content.getBytes(StandardCharsets.UTF_8));
             }
@@ -262,9 +543,11 @@ public class MainActivity extends Activity {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED
                     && pendingText[0] != null) {
                 boolean ok = writeLegacyText(pendingText[0], pendingText[1]);
-                uiToast(ok ? "已保存「" + pendingText[0] + "」" : "保存失败");
+                if (ok) dlEvent("done", pendingText[0],
+                    new File(DL_LEGACY_DIR, pendingText[0]).getAbsolutePath());
+                else dlEvent("error", pendingText[0], "写入文件失败");
             } else {
-                uiToast("缺少存储权限,无法保存歌词");
+                dlEvent("error", pendingText[0] == null ? "" : pendingText[0], "缺少存储权限");
             }
             pendingText[0] = pendingText[1] = null;
         }
@@ -277,25 +560,6 @@ public class MainActivity extends Activity {
     /** 桥线程里也能安全弹 Toast(切回主线程)。 */
     private void uiToast(String msg) {
         runOnUiThread(() -> toast(this, msg));
-    }
-
-    private void onDownload(String url, String ua, String disposition, String mime, long len) {
-        try {
-            String name = guessName(url, disposition);
-            DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-            req.setMimeType(mime);
-            req.setTitle(name);
-            req.setDescription("网易云下载器");
-            req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name);
-            String ck = CookieManager.getInstance().getCookie(url);
-            if (ck != null) req.addRequestHeader("cookie", ck);
-            if (ua != null) req.addRequestHeader("User-Agent", ua);
-            DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
-            dm.enqueue(req);
-        } catch (Throwable t) {
-            Dbg.w(this, "下载失败", t);
-        }
     }
 
     private static String guessName(String url, String disposition) {
