@@ -1995,18 +1995,46 @@ if __name__ == '__main__':
 
 
 def start():
-    """Chaquopy 启动入口:阻塞运行 Flask 服务。"""
+    """桌面/服务器模式入口(监听 HTTP 端口)。App 内无端口架构不再调用此函数,
+    改由 handle_api() 桥接分发;保留以兼容 wy-web-server 独立部署场景。"""
     cookie = os.environ.get('WY_COOKIE', '')
     if cookie:
         set_wy_cookie(cookie)
-    print('蓝莓派 App 内嵌服务启动: http://127.0.0.1:5000')
+    print('蓝莓派 Web 服务启动: http://127.0.0.1:5000')
     app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)
 
 
 def get_html():
-    """供 Java 层在 Flask 绑定端口前调用:提前把界面 HTML 渲染进 WebView,
-    消除「启动白屏等待」;后端未就绪期间由前端 bootLoop 自动重试补载数据。"""
+    """供 Java 层调用:把界面 HTML 渲染进 WebView(无端口架构,无需等服务启动)。"""
     return EMBEDDED_HTML
+
+
+def _ensure_init():
+    """桥接模式一次性初始化(幂等)。"""
+    global _BRIDGE_INITED
+    if _BRIDGE_INITED:
+        return
+    cookie = os.environ.get('WY_COOKIE', '')
+    if cookie:
+        set_wy_cookie(cookie)
+    _BRIDGE_INITED = True
+
+
+_BRIDGE_INITED = False
+
+
+def handle_api(path):
+    """JS 桥接入口(无端口模式核心):WebView 页面经 AndroidBridge 直达此处,
+    用 Flask test client 在进程内分发到既有路由 —— 零网络开销、零端口监听、
+    路由逻辑零改动。每次调用独立 client,天然线程安全,可并发。
+    返回 JSON 字符串 {"status": <http状态码>, "body": "<路由原始响应>"}"""
+    _ensure_init()
+    r = app.test_client(use_cookies=False).open(path, method='GET')
+    body = r.get_data(as_text=True)
+    # 404 兜底:未匹配路由返回的是 HTML 错误页,包装成 JSON 供前端统一解析
+    if r.status_code == 404 and not body.lstrip().startswith('{'):
+        body = json.dumps({'code': 404, 'message': '接口不存在'})
+    return json.dumps({'status': r.status_code, 'body': body})
 
 # ════════ 内嵌界面 index.html ════════
 EMBEDDED_HTML = r'''<!DOCTYPE html>
@@ -2423,7 +2451,29 @@ let hotSongs = [];
 
 const $ = id => document.getElementById(id);
 function esc(s) { return (s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-async function api(path) { const r = await fetch(path); return r.json(); }
+/* ============ API 传输层:无端口架构 ============
+ * App 内:经 AndroidBridge 直连 Python(异步线程池,结果回调 __onApiResult);
+ * 桌面浏览器兜底:fetch 直连 wy-web-server。调用方语义不变(返回路由 JSON)。 */
+let _reqSeq = 0;
+const _pending = {};
+function api(path) {
+  if (window.AndroidBridge && AndroidBridge.request) {
+    return new Promise((resolve, reject) => {
+      const id = ++_reqSeq;
+      const timer = setTimeout(() => {
+        if (_pending[id]) { delete _pending[id]; reject(new Error('请求超时')); }
+      }, 60000);
+      _pending[id] = { resolve, reject, timer };
+      AndroidBridge.request(String(id), path);      // 立即返回,不阻塞页面
+    });
+  }
+  return fetch(path).then(r => r.json());           // 桌面浏览器兑底
+}
+window.__onApiResult = (id, status, body) => {
+  const p = _pending[id]; if (!p) return;           // 过期/超时结果丢弃
+  delete _pending[id]; clearTimeout(p.timer);
+  try { p.resolve(JSON.parse(body)); } catch (e) { p.reject(new Error('响应解析失败')); }
+};
 function fmtTime(s) { if (!isFinite(s) || s <= 0) return '00:00'; s = Math.floor(s); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
 
 /* 全局封面背景:直接用官方接口搜索数据自带的专辑封面(img 字段),零额外请求 */
@@ -2494,10 +2544,10 @@ function playHot(i) {
   silentSearch(song.name);    // 再自动搜索同名歌名填充结果面板
 }
 
-/* ============ 启动引导:界面先行渲染,后端未就绪时自动重试 + 轻浮层提示 ============
- * App 内 WebView 会先于 Flask 绑定端口拿到本页(baseURL 指向 127.0.0.1:5000),
- * 此时所有 fetch 都会失败:首次失败才显示「服务启动中…」浮层(避免正常启动闪现),
- * 每 500ms 自动重试拉取热门歌曲,成功或收到 Java 层 onServerReady 回调即隐藏。 */
+/* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + 轻浮层提示 ============
+ * 兜底逻辑:若首个 API 调用因任何原因失败(如极端情况下的桥延迟),
+ * 首次失败才显示「服务启动中…」浮层(避免正常启动闪现),每 500ms 自动重试
+ * 拉取热门歌曲,成功即隐藏;桌面浏览器 fetch 模式同样适用。 */
 let bootTries = 0, bootDone = false;
 const bootTip = document.createElement('div');
 bootTip.id = 'bootTip'; bootTip.style.display = 'none';
@@ -2804,6 +2854,17 @@ function triggerDownload(href, filename, revoke) {
   if (revoke) setTimeout(() => URL.revokeObjectURL(href), 30000);
 }
 
+/* 无端口模式下载出口:大文件交原生 DownloadManager 直链下载,
+ * 小文本由桥直接写入公共 Download 目录;桌面浏览器仍走 <a download> 兑底 */
+function nativeDownload(filename, url) {
+  if (window.AndroidBridge && AndroidBridge.download) AndroidBridge.download(filename, url);
+  else triggerDownload(url, filename, false);
+}
+function saveTextFile(filename, content) {
+  if (window.AndroidBridge && AndroidBridge.downloadText) AndroidBridge.downloadText(filename, content);
+  else triggerDownload(URL.createObjectURL(new Blob([content], {type: 'application/octet-stream'})), filename, true);
+}
+
 async function downloadSong() {
   const s = state.song;
   closeDlModal();
@@ -2818,9 +2879,9 @@ async function downloadSong() {
       if (fi.code === 200 && fi.data && fi.data.ext) ext = fi.data.ext;
     } catch (e) { /* 探测失败退回猜测后缀 */ }
     const filename = `${safeName(s.name)}-${safeName(s.singer)}.${ext}`;
-    // 走后端流式代理(/api/download):同源 + Content-Disposition 强制按真实后缀保存,
-    // 避免直链跨域被浏览器按 MIME 命名为 .mpga 等错误后缀
-    triggerDownload(`/api/download?songmid=${s.songmid}&quality=${QUALITY}`, filename, false);
+    // 无端口模式:直链交给原生 DownloadManager(文件名由 App 精确控制,
+    // 不再依赖同源代理与 Content-Disposition 防止后缀错乱)
+    nativeDownload(filename, r.data.url);
     toast(`开始下载「${filename}」`, 'success');
   } catch (e) {
     toast('下载请求失败', 'error');
@@ -2834,12 +2895,16 @@ async function downloadLyric() {
   try {
     // 先确认有歌词(顺便给出友好错误提示)
     const r = await api(`/api/lyric?songmid=${s.songmid}`);
-    const lrc = (r.code === 200 && r.data) ? (r.data.lyric || '').trim() : '';
+    const d = (r.code === 200 && r.data) ? r.data : null;
+    const lrc = d ? (d.lyric || '').trim() : '';
     if (!lrc) { toast('这首歌暂无歌词可下载', 'warn'); return; }
-    // 走后端代理(/api/download-lyric):Content-Disposition 强制以 .lrc 保存,
-    // 避免前端 Blob 下载被浏览器按 MIME 改成 .txt 等错误后缀
+    // 拼接翻译歌词(与原后端下载代理逻辑一致),由桥写入公共 Download 目录,
+    // 文件名精确控制为 .lrc(不再依赖 Content-Disposition)
+    let content = lrc;
+    const tlyric = ((d.tlyric) || '').trim();
+    if (tlyric) content += '\n\n' + tlyric;
     const filename = `${safeName(s.name)}-${safeName(s.singer)}.lrc`;
-    triggerDownload(`/api/download-lyric?songmid=${s.songmid}`, filename, false);
+    saveTextFile(filename, content);
     toast(`已保存「${filename}」`, 'success');
   } catch (e) {
     toast('歌词下载失败', 'error');
@@ -2894,11 +2959,17 @@ function closeMvModal() {
   $('mvModal').classList.remove('show');
 }
 
-function downloadMv() {
+async function downloadMv() {
   if (!mvState.mvid || !state.song) return;
   const filename = `${safeName(state.song.name)}-${safeName(state.song.singer)}-MV.mp4`;
-  triggerDownload(`/api/download-mv?mvid=${mvState.mvid}&name=${encodeURIComponent(state.song.name)}&singer=${encodeURIComponent(state.song.singer)}`, filename, false);
-  toast('已开始下载 MV', 'success');
+  try {
+    const r = await api(`/api/mv/url?mvid=${mvState.mvid}`);
+    if (r.code !== 200 || !r.data || !r.data.url) { toast(`MV 解析失败: ${r.message || '未知错误'}`, 'error'); return; }
+    nativeDownload(filename, r.data.url);               // 原生 DownloadManager 直链下载
+    toast('已开始下载 MV', 'success');
+  } catch (e) {
+    toast('MV 下载失败', 'error');
+  }
 }
 
 /* ============ 歌词面板(独立渲染,只动歌词面板) ============ */
