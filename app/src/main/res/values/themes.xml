@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 基于 Material 深色 NoActionBar,把启动瞬间的窗口底色从默认白色改为 #FF0F0F0F:
+         冷启动/杀后台重启时,系统先画 windowBackground 再等 Activity 内容,
+         白闪就来自这一帧 —— 提前染成深色即可根除 -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/launch_bg</item>
+        <item name="android:colorBackground">@color/launch_bg</item>
+        <item name="android:statusBarColor">@color/launch_bg</item>
+        <item name="android:navigationBarColor">@color/launch_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

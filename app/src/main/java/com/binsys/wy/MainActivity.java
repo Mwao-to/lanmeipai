@@ -101,6 +101,8 @@ public class MainActivity extends Activity {
 
         setContentView(R.layout.activity_main);
         web = findViewById(R.id.web);
+        // WebView 渲染前的默认底色同为深色,与窗口背景一致,彻底消除白闪
+        web.setBackgroundColor(0xFF0F0F0F);
 
         WebSettings st = web.getSettings();
         st.setJavaScriptEnabled(true);
