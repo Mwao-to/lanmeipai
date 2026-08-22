@@ -44,6 +44,11 @@ public class MainActivity extends Activity {
         // 所有 <a download> 触发的下载交给系统下载管理器(保存到公共 Download 目录)
         web.setDownloadListener(this::onDownload);
 
+        // 先显示启动画面,服务就绪后自动切换到主界面
+        web.loadData("<html><body style='background:#1e1e20;display:flex;align-items:center;justify-content:center;height:90vh'>"
+            + "<p style='color:#8ab4f8;font-family:sans-serif;font-size:18px'>蓝莓派启动中…</p></body></html>",
+            "text/html", "utf-8");
+
         startServerThenLoad();
     }
 
