@@ -2321,6 +2321,29 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     transition:transform var(--t-press) var(--spring), border-color .15s ease, background .15s ease;
   }
   @media (hover:hover) { .dl-tag:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
+
+  /* ═══ 五键快捷条:双栏列表正下方 ═══
+   * 容器与播放器同圆角(--r-xl)同玻璃质感;宽度为播放器一半(小 1 倍)且横向居中;
+   * 内部 5 键等权 1:1,透明药丸+红字(与播放器下载标签同配色) */
+  .quick-bar {
+    display:flex; gap:6px; align-items:center;
+    width:50%; margin:10px auto 0;          /* 播放器一半宽,横向居中 */
+    padding:6px; box-sizing:border-box;
+    background:linear-gradient(165deg, rgba(46,46,52,.6), rgba(24,24,28,.68));
+    border:1px solid rgba(255,255,255,.11); border-radius:var(--r-xl);
+    box-shadow:0 8px 24px rgba(0,0,0,.4), var(--hi-top);
+  }
+  .quick-bar button {
+    flex:1 1 0; min-width:0;                 /* 五键权重 1:1,等宽等大 */
+    padding:5px 0; font-family:var(--mono); font-size:10.5px;
+    color:var(--accent-hover); background:rgba(255,255,255,.05);
+    border:1px solid var(--glass-border); border-radius:99px;
+    text-align:center; cursor:pointer; user-select:none; touch-action:manipulation;
+    box-shadow:var(--hi-top);
+    transition:transform var(--t-press) var(--spring), border-color .15s ease, background .15s ease;
+  }
+  @media (hover:hover) { .quick-bar button:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
+  .quick-bar button:active { transform:scale(.9); }   /* 弹性按压,与全站一致 */
   .dl-tag:active { transform:scale(.9); }
   #mvModal .modal-box { width:min(340px, 88vw); }
   .modal-box video {
@@ -2498,6 +2521,15 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
         <div id="resultBody"></div>
       </div>
     </div>
+  </div>
+
+  <!-- 五键快捷条:ABCDE 功能占位,横向居中,整体宽度为播放器的一半 -->
+  <div class="quick-bar" id="quickBar">
+    <button type="button" data-fn="A">A</button>
+    <button type="button" data-fn="B">B</button>
+    <button type="button" data-fn="C">C</button>
+    <button type="button" data-fn="D">D</button>
+    <button type="button" data-fn="E">E</button>
   </div>
 </div>
 
@@ -2762,6 +2794,12 @@ function playHot(i) {
   play(i, hotSongs);          // 先播放
   silentSearch(song.name);    // 再自动搜索同名歌名填充结果面板
 }
+
+/* ═══ 五键快捷条(ABCDE 功能占位):点击提示待接入 ═══ */
+$('quickBar').addEventListener('click', e => {
+  const b = e.target.closest('button[data-fn]');
+  if (b) toast(`「${b.dataset.fn}」功能预留位,待接入`, 'info', 1500);
+});
 
 /* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============
  * 若首个 API 调用因任何原因失败(如极端情况下的桥延迟),仅首次失败弹一次
