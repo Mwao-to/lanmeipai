@@ -52,13 +52,13 @@ public class MainActivity extends Activity {
         st.setMediaPlaybackRequiresUserGesture(false);
         st.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         web.setWebViewClient(new WebViewClient() {
-            @Override public void onPageStarted(java.lang.String url, android.graphics.Bitmap f) {
+            @Override public void onPageStarted(WebView view, java.lang.String url, android.graphics.Bitmap f) {
                 Dbg.w(self, "WebView onPageStarted: " + url);
             }
-            @Override public void onPageFinished(java.lang.String url) {
+            @Override public void onPageFinished(WebView view, java.lang.String url) {
                 Dbg.w(self, "WebView onPageFinished: " + url);
             }
-            @Override public void onReceivedError(WebResourceRequest rq, WebResourceError er) {
+            @Override public void onReceivedError(WebView view, WebResourceRequest rq, WebResourceError er) {
                 Dbg.w(self, "WebView 错误: " + rq.getUrl() + " " + er.getDescription());
             }
         });
@@ -80,7 +80,7 @@ public class MainActivity extends Activity {
             Dbg.w(self, "[py] 线程启动,准备初始化 Python…");
             try {
                 Python py = Python.getInstance();
-                Dbg.w(self, "[py] Python 已初始化: " + py.getVersion());
+                Dbg.w(self, "[py] Python 已初始化");
                 py.getModule("main_app").callAttr("start");   // 阻塞直到服务停止
                 Dbg.w(self, "[py] start() 已返回(Flask 服务退出)");
             } catch (Throwable t) {
