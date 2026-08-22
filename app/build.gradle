@@ -20,7 +20,7 @@ android {
             pip {
                 install 'flask'
                 install 'requests'
-                install 'qrcode'   # 纯Python:扫码登录二维码SVG本地渲染(A键兜底)
+                install 'qrcode'   // 纯Python:扫码登录二维码SVG本地渲染(A键兜底)
             }
         }
     }
