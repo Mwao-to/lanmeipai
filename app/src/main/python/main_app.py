@@ -2385,7 +2385,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   </header>
 
   <div class="search-bar">
-    <input id="kw" placeholder="搜索歌曲 / 歌手 / 专辑…" onkeydown="if(event.key==='Enter')doSearch(1)">
+    <input id="kw" autocomplete="off" enterkeyhint="search" placeholder="搜索歌曲 / 歌手 / 专辑…" onkeydown="if(event.key==='Enter')doSearch(1)">
     <button class="btn" onclick="doSearch(1)">搜索</button>
   </div>
 
@@ -2601,6 +2601,12 @@ window.__onDownloadEvent = (status, filename, detail) => {
   }
   dlRender();
 };
+
+/* 禁止搜索框主动拉起输入法:启动时清掉自动焦点,用户点击输入框时才弹键盘 */
+window.addEventListener('load', () => setTimeout(() => {
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) ae.blur();
+}, 60));
 function fmtTime(s) { if (!isFinite(s) || s <= 0) return '00:00'; s = Math.floor(s); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); }
 
 /* 全局封面背景:直接用官方接口搜索数据自带的专辑封面(img 字段),零额外请求 */
