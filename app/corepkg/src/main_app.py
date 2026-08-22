@@ -2530,6 +2530,22 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     display:flex; flex-direction:column; align-items:center;
     animation:popIn var(--t-pop) var(--spring);   /* 弹性入场 */
   }
+  /* ═══ 下载弹窗·封面预览:与下载按钮同宽(210px),1:1 正方形,整体圆角 ═══ */
+  .dl-coverbox {
+    width:210px; height:210px;             /* 长度=下载按钮宽度,高度=长度 */
+    margin-bottom:12px; border-radius:14px; overflow:hidden;
+    background:var(--bg-panel); border:1px solid var(--glass-border);
+    box-shadow:0 4px 16px rgba(0,0,0,.35), var(--hi-top);
+    flex-shrink:0;
+  }
+  .dl-coverbox img {
+    display:block; width:100%; height:100%;
+    object-fit:cover;                       /* 封面适配填满,不变形 */
+  }
+  .dl-coverbox .nocover {
+    display:flex; align-items:center; justify-content:center;
+    height:100%; color:#55555c; font-family:var(--mono); font-size:10px;
+  }
   @keyframes popIn { from { opacity:0; transform:scale(.92) translateY(8px); } to { opacity:1; transform:none; } }
   .modal-x {
     position:absolute; top:8px; right:10px; background:none; border:none;
@@ -2715,6 +2731,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   <div class="modal-box">
     <button class="modal-x" onclick="closeDlModal()" title="关闭">○</button>
     <div class="modal-title"><span id="dlSongName">当前歌曲</span></div>
+    <div class="dl-coverbox" id="dlCoverBox"><div class="nocover">无封面</div></div>
     <button class="modal-btn" onclick="downloadSong()">下载歌曲</button>
     <button class="modal-btn secondary" onclick="downloadLyric()">下载歌词</button>
   </div>
@@ -3556,6 +3573,10 @@ const safeName = n => (n || '未知').replace(/[\\/:*?"<>|]/g, '_').trim();
 function openDlModal() {
   if (!state.song) { toast('还没有播放中的歌曲', 'warn'); return; }
   $('dlSongName').textContent = `${state.song.name} - ${state.song.singer}`;   // 标题显示当前歌曲,单行超出截断为...
+  const box = $('dlCoverBox');                       // 封面预览:与下载按钮同宽的 1:1 圆角图
+  box.innerHTML = state.song.img
+    ? `<img src="${esc(state.song.img)}" alt="cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\'nocover\'>封面加载失败</div>'">`
+    : '<div class="nocover">无封面</div>';
   $('dlModal').classList.add('show');
 }
 function closeDlModal() { $('dlModal').classList.remove('show'); }
