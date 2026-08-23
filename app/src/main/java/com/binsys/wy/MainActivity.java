@@ -362,6 +362,38 @@ public class MainActivity extends Activity {
                 // 提示由页面 JS 统一弹出(复制歌曲分享链接成功),原生不再重复 Toast
             });
         }
+
+        /** EQ当前预设持久化:写入应用私有目录 files/eqw.json(格式:{"preset":"预设名"}) */
+        @JavascriptInterface
+        public void eqSave(String json) {
+            try {
+                java.io.File f = new java.io.File(getFilesDir(), "eqw.json");
+                java.io.FileWriter w = new java.io.FileWriter(f);
+                w.write(json == null ? "" : json);
+                w.close();
+                Dbg.w(this, "[eq] eqw.json 已保存: " + json);
+            } catch (Throwable t) {
+                Dbg.w(this, "‼️ [eq] eqw.json 写入失败", t);
+            }
+        }
+
+        /** EQ当前预设读取:返回 eqw.json 内容,无文件返回空串(JavascriptInterface同步返回) */
+        @JavascriptInterface
+        public String eqLoad() {
+            try {
+                java.io.File f = new java.io.File(getFilesDir(), "eqw.json");
+                if (!f.exists()) return "";
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = r.readLine()) != null) sb.append(line);
+                r.close();
+                return sb.toString();
+            } catch (Throwable t) {
+                Dbg.w(this, "‼️ [eq] eqw.json 读取失败", t);
+                return "";
+            }
+        }
     }
 
     /** 向页面派发下载器事件(status: start/progress/done/error)。 */

@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 60
-        versionName '3.47'   // C键文本改「EQ」;EQ预设列表整体放大1.5倍(zoom,矮屏1.2保底),去除纵横滚动条,弹窗稍宽(340px)确保13套预设全部在弹窗内适配不超出
+        versionCode 61
+        versionName '3.48'   // EQ弹窗改固定视口滚动布局(显示8行可下滑,隐藏滚动条,行样式对齐评论条目);超重低音配方去浑浊(200~400Hz堆积削减);预设选择持久化到私有目录eqw.json(新增eqSave/eqLoad桥,启动时文件优先恢复)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

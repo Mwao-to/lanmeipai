@@ -2623,18 +2623,21 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   @media (hover:hover) { .dl-tag:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
 
-  /* ═══ C键·EQ弹窗(复用modal结构;预设列表1.5倍放大,无滚动条整体适配弹窗内) ═══ */
-  .eqbox { width:min(340px, 92vw); }                       /* EQ弹窗稍宽,容纳放大后的预设布局 */
-  .eq-list {                                               /* 去掉纵横滚动条:zoom整体放大,行距压缩保证13套全部容纳 */
+  /* ═══ C键·EQ弹窗(复用modal结构;行样式对齐评论条目,固定视口显示8行可下滑,隐藏滚动条) ═══ */
+  .eqbox { width:min(340px, 92vw); }
+  .eq-list {                               /* 固定高度=8行(基准25px×8),zoom后视觉仍1.5倍;弹窗内居中 */
     margin-top:10px; zoom:1.5; max-width:100%;
-    border-top:1px solid var(--glass-border);
+    height:200px; overflow-y:auto; overflow-x:hidden;
+    overscroll-behavior:contain; scrollbar-width:none;
+    border-top:1px solid var(--glass-border); border-bottom:1px solid var(--glass-border);
   }
-  .eq-row {
-    display:flex; align-items:center; gap:8px;
-    padding:4px 6px; border-bottom:1px solid rgba(255,255,255,.05);
-    cursor:pointer; user-select:none;
+  .eq-list::-webkit-scrollbar { width:0; height:0; display:none; }
+  .eq-row {                                /* 对齐评论条目(cmt-item):全宽+细分割线,整齐滚动 */
+    display:flex; align-items:center; gap:8px; width:100%;
+    padding:4px 4px; border-bottom:1px solid rgba(255,255,255,.06);
+    cursor:pointer; user-select:none; text-align:left; box-sizing:border-box;
   }
-  @media (max-height:640px) { .eq-list { zoom:1.2; } }     /* 矮屏保底仍不超出弹窗 */
+  .eq-row:last-child { border-bottom:none; }
   .eq-row:active { background:rgba(255,255,255,.06); }
   .eq-name { flex:0 0 64px; font-size:11px; color:var(--text); font-family:var(--mono); }
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
@@ -4197,7 +4200,7 @@ const EQ_BANDS = [100, 200, 400, 800, 1000, 3000, 6000, 10000];
 const EQ_PRESETS = {
   '正常':     [0,0,0,0,0,0,0,0],
   '倍思经典': [3,3,1,0,-1,1,2,2],
-  '超重低音': [8,7,4,1,0,0,1,2],
+  '超重低音': [7,4,1,0,-1,0,1,2],
   '影院音效': [5,4,1,-1,-2,1,4,5],
   'HIFI现场': [2,1,0,-1,1,3,4,4],
   '清澈人声': [-1,-2,0,3,4,3,1,0],
@@ -4210,7 +4213,20 @@ const EQ_PRESETS = {
   '摇滚经典': [4,3,1,2,-1,1,3,4]
 };
 let eqCtx = null, eqFilters = null;
-let eqActiveName = localStorage.getItem('eqPreset') || '正常';
+let eqActiveName = '正常';
+(function restoreEq() {                    // 恢复上次预设:私有目录eqw.json优先,localStorage兑底
+  try { const ls = localStorage.getItem('eqPreset'); if (ls && EQ_PRESETS[ls]) eqActiveName = ls; } catch (e) { }
+  try {
+    const s = window.AndroidBridge && AndroidBridge.eqLoad ? AndroidBridge.eqLoad() : '';
+    if (s) {
+      const o = JSON.parse(s);
+      if (o && o.preset && EQ_PRESETS[o.preset]) {
+        eqActiveName = o.preset;
+        localStorage.setItem('eqPreset', o.preset);
+      }
+    }
+  } catch (e) { }
+})();
 const clampDb = v => Math.max(-8, Math.min(8, Number(v) || 0));
 
 function eqCorsReload() {                        // 正在播的歌要以CORS模式重载(仅首次激活)
@@ -4258,6 +4274,7 @@ async function applyEq(name) {
   }
   eqActiveName = name;
   localStorage.setItem('eqPreset', name);
+  if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));   // 同步持久化到私有目录eqw.json
   renderEqList();
   toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
 }
