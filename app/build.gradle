@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 52
-        versionName '3.39'   // 进度条常驻播放器内部上方(移除点空白处显示/隐藏);新增分享按钮:当前歌曲网易云官方单曲链接填入搜索框
+        versionCode 53
+        versionName '3.40'   // 分享重做:不再动搜索框,拼接「我在听网易云的歌曲：歌名-歌手+官方链接」先走常规(JS向聚焦输入框光标插入),失败兑底imeCommit桥(剪贴板+弹键盘,输入法建议条上屏)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

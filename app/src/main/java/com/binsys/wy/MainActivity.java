@@ -341,6 +341,33 @@ public class MainActivity extends Activity {
         public void downloadText(String filename, String content) {
             saveTextToDownloads(filename, content);
         }
+
+        /** 分享兑底:把文本递给系统输入法 —— 写入剪贴板(主流中文输入法键盘上方会显示
+         *  这条剪贴板建议,点一下即可上屏到任何输入框),并尝试弹出键盘让建议立即可见。 */
+        @JavascriptInterface
+        public void imeCommit(final String text) {
+            runOnUiThread(() -> {
+                boolean ok = false;
+                try {
+                    android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                        getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (cm != null) {
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("wy-share", text));
+                        ok = true;
+                    }
+                    try {   // 弹出键盘,输入法的剪贴板建议条随即呈现刚写入的内容
+                        android.view.inputmethod.InputMethodManager imm =
+                            (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                        if (imm != null && web != null) { web.requestFocus(); imm.showSoftInput(web, 0); }
+                    } catch (Throwable ignore) { }
+                } catch (Throwable t) {
+                    Dbg.w(MainActivity.this, "‼️ [ime] imeCommit 失败", t);
+                }
+                Dbg.w(MainActivity.this, "[ime] 兑底传递完成 clipboard=" + ok
+                    + " len=" + (text == null ? 0 : text.length()));
+                toast(MainActivity.this, ok ? "已传给输入法：点击键盘上方剪贴板建议即可上屏" : "分享失败");
+            });
+        }
     }
 
     /** 向页面派发下载器事件(status: start/progress/done/error)。 */
