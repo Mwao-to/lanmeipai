@@ -1034,7 +1034,8 @@ async function doUserSearch() {
   $('userResults').innerHTML = '';
   try {
     const r = await api(`/api/wy_user_search?kw=${encodeURIComponent(kw)}`);
-    const us = r.code === 200 && r.data ? r.data : [];
+    if (r.code !== 200) { $('userStatus').textContent = '// 搜索失败:' + (r.message || '接口异常') + ',稍后再试'; return; }
+    const us = r.data || [];
     if (!us.length) { $('userStatus').textContent = '// 未找到该用户,换个关键词试试'; return; }
     // 同名用户先列进弹窗列表让用户选(样式同歌单条目),不自动拉歌单
     $('userStatus').textContent = us.length === 1

@@ -2058,24 +2058,15 @@ def api_wy_user_search():
         return jsonify({'code': 400, 'message': '缺少关键词'})
     try:
         from urllib.parse import quote
-        users, seen, offset = [], set(), 0
-        for _ in range(12):                       # 每页30,上限360人(同名词极端情形兑底)
-            resp = _wy_web_get(f'/api/search/get/web?s={quote(kw)}&type=1002&limit=30&offset={offset}')
-            body = resp['body']
-            ups = ((body.get('result') or {}).get('userprofiles')) or [] if isinstance(body, dict) else []
-            if not ups:
-                break
-            fresh = 0
-            for u in ups:
-                uid_ = u.get('userId')
-                if uid_ and uid_ not in seen:     # 同名不同 uid 全部保留
-                    seen.add(uid_)
-                    users.append({'uid': uid_, 'nick': u.get('nickname') or '(无名)',
-                                  'avatar': u.get('avatarUrl') or ''})
-                    fresh += 1
-            if fresh == 0 or len(ups) < 30:       # 无新增或已到末页即停
-                break
-            offset += 30
+        # 单请求、limit=8(v3.33策略):多页连抓会触发官方接口风控,后续搜索全部落空
+        resp = _wy_web_get(f'/api/search/get/web?s={quote(kw)}&type=1002&limit=8&offset=0')
+        body = resp['body']
+        ups = []
+        if isinstance(body, dict):
+            ups = ((body.get('result') or {}).get('userprofiles')) or []
+        users = [{'uid': u.get('userId'), 'nick': u.get('nickname') or '(无名)',
+                  'avatar': u.get('avatarUrl') or ''}
+                 for u in ups if u.get('userId')]
         return jsonify({'code': 200, 'data': users})
     except Exception as e:
         return jsonify({'code': 500, 'message': str(e)})
@@ -3388,7 +3379,8 @@ async function doUserSearch() {
   $('userResults').innerHTML = '';
   try {
     const r = await api(`/api/wy_user_search?kw=${encodeURIComponent(kw)}`);
-    const us = r.code === 200 && r.data ? r.data : [];
+    if (r.code !== 200) { $('userStatus').textContent = '// 搜索失败:' + (r.message || '接口异常') + ',稍后再试'; return; }
+    const us = r.data || [];
     if (!us.length) { $('userStatus').textContent = '// 未找到该用户,换个关键词试试'; return; }
     // 同名用户先列进弹窗列表让用户选(样式同歌单条目),不自动拉歌单
     $('userStatus').textContent = us.length === 1
