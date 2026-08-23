@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 58
-        versionName '3.45'   // 「单曲直连」改「单曲」;点封面下载同步关闭弹窗并提示正在下载;移除Android原生「下载完成」Toast(doneToast),保留页面弹窗
+        versionCode 59
+        versionName '3.46'   // C键接入音效EQ:WebAudio 8段peaking滤波链(100~10K Hz底子固定,dB硬限±8),13套预设(正常/倍思经典/超重低音/影院/HIFI现场/清澈人声/DJ/经典流行/爵士/古典/高音增强/自然原声/摇滚)竖向弹窗列表+8柱dB迷你图,选择localStorage记忆,首次激活CORS模式重载当前歌
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

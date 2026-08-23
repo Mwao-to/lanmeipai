@@ -278,6 +278,26 @@
   }
   @media (hover:hover) { .dl-tag:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
 
+  /* ═══ C键·EQ弹窗(复用modal结构;竖向预设列表+8柱dB迷你图) ═══ */
+  .eq-list {
+    margin-top:12px; max-height:52vh; overflow-y:auto; overscroll-behavior:contain;
+    border-top:1px solid var(--glass-border);
+  }
+  .eq-row {
+    display:flex; align-items:center; gap:10px;
+    padding:9px 6px; border-bottom:1px solid rgba(255,255,255,.05);
+    cursor:pointer; user-select:none;
+  }
+  .eq-row:active { background:rgba(255,255,255,.06); }
+  .eq-name { flex:0 0 64px; font-size:11px; color:var(--text); font-family:var(--mono); }
+  .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
+  .eq-bars {
+    flex:1; height:20px; display:flex; align-items:flex-end;
+    justify-content:flex-end; gap:2px;
+  }
+  .eq-bars i { width:5px; background:rgba(255,255,255,.18); border-radius:1px; }
+  .eq-row.on .eq-bars i { background:var(--accent-hover); }
+
   /* ═══ 五键快捷条:双栏列表正下方 ═══
    * 外层容器观感对齐主列表(.panel):同圆角(--r-md)、同底色透明度(--glass-regular);
    * 上边距10px(v3.42曾改40px后回滚);
@@ -636,6 +656,14 @@
   </div>
 </div>
 
+<div class="modal-mask" id="eqModal">
+  <div class="modal-box">
+    <button class="modal-x" onclick="closeEqModal()" title="关闭">○</button>
+    <div class="modal-title"><span>音效 EQ <em style="font-style:normal;font-size:9px;color:#77777f">100~10KHz · ±8dB</em></span></div>
+    <div class="eq-list" id="eqList"></div>
+  </div>
+</div>
+
 <div class="modal-mask" id="mvModal">
   <div class="modal-box">
     <button class="modal-x" onclick="closeMvModal()" title="关闭">○</button>
@@ -923,6 +951,7 @@ $('quickBar').addEventListener('click', e => {
   const fn = b.dataset.fn;
   if (fn === 'A') { openCookieModal(); return; }   // ㉿:扫码登录兑底
   if (fn === 'B') { openUserModal(); return; }     // B:用户歌单爬取
+  if (fn === 'C') { openEqModal(); return; }      // C:音效EQ预设弹窗
   toast(`「${fn}」功能预留位,待接入`, 'info', 1500);
 });
 
@@ -1679,6 +1708,7 @@ async function play(i, list) {
     const viaTag = r.data.via === 'toubiec' ? '<span class="tag3rd">VIP</span>' : '';
     setPlayerLine($('nowName'), `${esc(song.name)}${viaTag}`);   // 歌名+VIP标签作为整体跑马灯
     if (r.data.via === 'toubiec') toast(`已通过VIP通道播放「${song.name}」`, 'warn', 3000);
+    if (localStorage.getItem('eqArmed')) audio.crossOrigin = 'anonymous';   // EQ启用过:以CORS模式加载(WebAudio采集必需,CDN已实测ACAO:*)
     audio.src = r.data.url;
     audio.play().catch(() => { });   // 自动播放被拦截时静默,用户手动点击播放即可
   } catch (e) {
@@ -1810,7 +1840,95 @@ function closeDlModal() { $('dlModal').classList.remove('show'); }
 $('dlModal').addEventListener('click', e => { if (e.target.id === 'dlModal') closeDlModal(); });
 $('mvModal').addEventListener('click', e => { if (e.target.id === 'mvModal') closeMvModal(); });
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDlModal(); closeMvModal(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDlModal(); closeMvModal(); closeEqModal(); } });
+
+/* ═══ C键·音效EQ(WebAudio 8段peaking滤波链) ═══
+ * Hz底子固定:100/200/400/800/1K/3K/6K/10K;dB每段可调,硬限±8。
+ * 直链CDN已实测返回ACAO:*,MediaElementSource跨源采集不会静音;
+ * 首次激活时若正在播歌,需以CORS模式重载一次(约1秒),此后切歌EQ持续生效。 */
+const EQ_BANDS = [100, 200, 400, 800, 1000, 3000, 6000, 10000];
+const EQ_PRESETS = {
+  '正常':     [0,0,0,0,0,0,0,0],
+  '倍思经典': [3,3,1,0,-1,1,2,2],
+  '超重低音': [8,7,4,1,0,0,1,2],
+  '影院音效': [5,4,1,-1,-2,1,4,5],
+  'HIFI现场': [2,1,0,-1,1,3,4,4],
+  '清澈人声': [-1,-2,0,3,4,3,1,0],
+  'DJ音效':   [7,6,2,-1,-2,2,5,6],
+  '经典流行': [3,2,0,-1,0,2,3,3],
+  '爵士':     [3,2,1,2,1,0,1,2],
+  '古典':     [2,1,0,0,0,1,2,3],
+  '高音增强': [0,0,0,0,1,3,6,8],
+  '自然原声': [1,1,0,0,0,0,0,1],
+  '摇滚经典': [4,3,1,2,-1,1,3,4]
+};
+let eqCtx = null, eqFilters = null;
+let eqActiveName = localStorage.getItem('eqPreset') || '正常';
+const clampDb = v => Math.max(-8, Math.min(8, Number(v) || 0));
+
+function eqCorsReload() {                        // 正在播的歌要以CORS模式重载(仅首次激活)
+  if (!audio.src) return;
+  const cur = audio.src, t = audio.currentTime, resume = !audio.paused;
+  audio.pause(); audio.src = cur; audio.load();
+  audio.addEventListener('loadedmetadata', function once() {
+    audio.removeEventListener('loadedmetadata', once);
+    try { audio.currentTime = t || 0; } catch (e) { }
+    if (resume) audio.play().catch(() => { });
+  });
+}
+function ensureEqChain() {
+  if (eqCtx) return true;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) { toast('此设备WebView不支持WebAudio，无法使用EQ', 'error'); return false; }
+  try {
+    localStorage.setItem('eqArmed', '1');        // 之后每次播放前都以CORS模式挂src(playSong读)
+    audio.crossOrigin = 'anonymous';
+    eqCorsReload();
+    eqCtx = new AC();
+    const src = eqCtx.createMediaElementSource(audio);
+    let node = src;
+    eqFilters = EQ_BANDS.map(f => {
+      const bq = eqCtx.createBiquadFilter();
+      bq.type = 'peaking'; bq.frequency.value = f; bq.Q.value = 1.1; bq.gain.value = 0;
+      node.connect(bq); node = bq;
+      return bq;
+    });
+    node.connect(eqCtx.destination);
+    return true;
+  } catch (e) {
+    eqCtx = null; eqFilters = null;
+    toast('EQ初始化失败: ' + e.message, 'error');
+    return false;
+  }
+}
+async function applyEq(name) {
+  const vals = EQ_PRESETS[name];
+  if (!vals) return;
+  if (name !== '正常' && !eqCtx && !ensureEqChain()) return;
+  if (eqCtx) {
+    if (eqCtx.state === 'suspended') { try { await eqCtx.resume(); } catch (e) { } }
+    vals.forEach((db, i) => { eqFilters[i].gain.value = clampDb(db); });   // dB硬限±8
+  }
+  eqActiveName = name;
+  localStorage.setItem('eqPreset', name);
+  renderEqList();
+  toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
+}
+function renderEqList() {
+  $('eqList').innerHTML = Object.keys(EQ_PRESETS).map(n => {
+    const bars = EQ_PRESETS[n]
+      .map(v => `<i style="height:${Math.max(6, Math.round((clampDb(v) + 8) / 16 * 100))}%"></i>`).join('');
+    return `<div class="eq-row${n === eqActiveName ? ' on' : ''}" onclick="applyEq('${n}')">`
+      + `<span class="eq-name">${n}</span><span class="eq-bars" title="100/200/400/800/1K/3K/6K/10K Hz">${bars}</span></div>`;
+  }).join('');
+}
+function openEqModal() {
+  renderEqList();
+  $('eqModal').classList.add('show');
+  if (!eqCtx && eqActiveName !== '正常') toast(`上次EQ「${eqActiveName}」待生效：点击该预设即启用`, 'info', 2500);
+}
+function closeEqModal() { $('eqModal').classList.remove('show'); }
+$('eqModal').addEventListener('click', e => { if (e.target.id === 'eqModal') closeEqModal(); });
 
 function triggerDownload(href, filename, revoke) {
   const a = document.createElement('a');
