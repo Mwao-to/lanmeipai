@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 69
-        versionName '3.56'   // 修复v3.55致命bug:插入PowerAMP导入逻辑时漏写const EQ_IMPORTED={}声明,加载期ReferenceError使整个script块崩死(EQ弹窗与播放入口后置函数全灭);补声明后harness实测38条预设渲染与全部EQ函数就位
+        versionCode 70
+        versionName '3.57'   // 二次导入Presets100.json耳机型号校正曲线100条(AutoEq风):EQ_IMPORT_RAW100内置副本+eqImport100()桥读兜底优先;合并逻辑重构为mergePamp复用;总预设138条(13内置+38导入),重名#n消歧原名显示
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
