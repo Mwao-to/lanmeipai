@@ -147,7 +147,6 @@ public class MainActivity extends Activity {
                 if (path != null) {
                     Dbg.w(self, "[dl][sys] 完成: " + path);
                     dlEvent("done", name, path);
-                    doneToast(name, path);   // 系统 Toast 双保险
                 } else {
                     dlEvent("error", name, "系统下载器下载失败");
                 }
@@ -372,13 +371,7 @@ public class MainActivity extends Activity {
             + "," + JSONObject.quote(detail == null ? "" : detail) + ")");
     }
 
-    /** 完成路径提示双保险:除页面内弹窗外,再用系统 Toast 弹一次绝对路径(必达)。 */
-    private void doneToast(String filename, String path) {
-        runOnUiThread(() -> {
-            try { Toast.makeText(this,
-                "「" + filename + "」下载完成\n已保存到:" + path,
-                Toast.LENGTH_LONG).show(); } catch (Throwable ignored) { }
-        });
+            });
     }
 
     /** 探测目标是否支持 Range 分块(断点续传)并获取总大小,返回 {支持?1:0, 总大小或-1}。 */
@@ -641,7 +634,6 @@ public class MainActivity extends Activity {
                 if (ok) {
                     Dbg.w(self, "[dl] 完成: " + finalPath);
                     dlEvent("done", filename, finalPath);
-                    doneToast(filename, finalPath);   // 系统 Toast 双保险
                 } else if (!fallback) {
                     // 系统下载器接管时由完成广播再报 done/error,这里不发 error 避免误报
                     dlEvent("error", filename, errMsg == null ? "未知错误" : errMsg);
@@ -767,7 +759,6 @@ public class MainActivity extends Activity {
                 }
                 Dbg.w(self, "[dl] 歌词已保存: " + finalPath);
                 dlEvent("done", filename, finalPath);
-                doneToast(filename, finalPath);   // 系统 Toast 双保险
             } catch (Throwable t) {
                 Dbg.w(self, "‼️ [dl] 文本保存失败: " + filename, t);
                 dlEvent("error", filename, t.getMessage() == null ? t.toString() : t.getMessage());

@@ -3792,7 +3792,7 @@ async function loadSingleSong(sid, seq, collectOnly) {
     }
     const list = r.data.list, s0 = list[0];
     if (collectOnly) return list;
-    applyListData(list, `♪ ${s0.name} · ${s0.singer} · 单曲直连`);
+    applyListData(list, `♪ ${s0.name} · ${s0.singer} · 单曲`);
     toast(`已加载单曲「${s0.name}」`, 'success', 2000);
     return list;
   } catch (e) {
@@ -4171,6 +4171,8 @@ function downloadCover() {
   const s = state.song;
   if (!s || !s.img) { toast('当前歌曲没有封面', 'warn'); return; }
   if (!dlCoverOk) { toast('封面源已失效，无法下载', 'warn'); return; }
+  closeDlModal();                                  // 关闭弹窗,让用户能看到正在下载的弹出提示
+  toast('正在下载封面…', 'info');
   nativeDownload(`${safeName(s.name)}-${safeName(s.singer)}.jpg`, s.img);
 }
 
