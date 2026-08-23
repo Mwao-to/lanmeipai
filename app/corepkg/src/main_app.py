@@ -2088,6 +2088,51 @@ def api_wy_user_playlists():
     except Exception as e:
         return jsonify({'code': 500, 'message': str(e)})
 
+# ═══ B键·搜索历史 urn.json(私有目录,最多8条 FIFO 轮换) ═══
+def _urn_file():
+    return os.path.join(_DATA_DIR, 'urn.json') if _DATA_DIR else ''
+
+def _urn_load():
+    f = _urn_file()
+    if not f or not os.path.exists(f):
+        return []
+    try:
+        with open(f, 'r', encoding='utf-8') as fp:
+            d = json.load(fp)
+        return d.get('list') if isinstance(d, dict) and isinstance(d.get('list'), list) else []
+    except Exception:
+        return []
+
+def _urn_save(lst):
+    f = _urn_file()
+    if not f:
+        return False
+    try:
+        with open(f, 'w', encoding='utf-8') as fp:
+            json.dump({'list': lst[:8]}, fp, ensure_ascii=False)
+        return True
+    except Exception:
+        return False
+
+@app.get('/api/urn_get')
+def api_urn_get():
+    """搜索历史(最多8条,旧在前新在后)。"""
+    _ensure_init()
+    return jsonify({'code': 200, 'data': _urn_load()})
+
+@app.get('/api/urn_add')
+def api_urn_add():
+    """记录一次用户名搜索:重搜视为最新移至尾部,满8条淘汰最旧。"""
+    _ensure_init()
+    nick = (request.args.get('nick') or '').strip()
+    if not nick:
+        return jsonify({'code': 400, 'message': '缺少 nick'})
+    lst = [x for x in _urn_load() if x.get('nick') != nick]
+    lst.append({'nick': nick, 'ts': time.time()})
+    lst = lst[-8:]                     # 环形轮换:只留最近8条
+    ok = _urn_save(lst)
+    return jsonify({'code': 200, 'data': {'saved': ok, 'list': lst}})
+
 @app.post('/api/cookie')
 def api_set_cookie():
     """设置网易云 Cookie(如 MUSIC_U=xxx),可选"""
@@ -2799,8 +2844,8 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 
   <!-- 五键快捷条:ABCDE 功能占位,横向居中,整体宽度为播放器的一半 -->
   <div class="quick-bar" id="quickBar">
-    <button type="button" data-fn="A">㉿</button>
-    <button type="button" data-fn="B">B</button>
+    <button type="button" data-fn="A">登录</button>
+    <button type="button" data-fn="B">歌单</button>
     <button type="button" data-fn="C">C</button>
     <button type="button" data-fn="D">D</button>
     <button type="button" data-fn="E">E</button>
@@ -2864,7 +2909,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 <div class="modal-mask" id="userModal">
   <div class="modal-box">
     <button class="modal-x" onclick="closeUserModal()" title="关闭">○</button>
-    <div class="modal-title">网易云用户 · 歌单爬取</div>
+    <div class="modal-title">网易云用户 · 歌单</div>
     <div class="qr-scroll">
       <div class="user-search-row">
         <input id="userKw" type="text" autocomplete="off" spellcheck="false" placeholder="输入用户昵称" onkeydown="if(event.key==='Enter')doUserSearch()">
@@ -3191,14 +3236,28 @@ async function saveCookieInput() {
 
 /* ═══ B键·用户歌单爬取(官方接口→移交主列表正常播放/下载) ═══ */
 function fmtWan(n) { n = n || 0; return n >= 10000 ? (n / 10000).toFixed(1) + '万' : String(n); }
+async function refreshUrnHistory() {
+  try {
+    const r = await api('/api/urn_get');
+    const hs = r.code === 200 && r.data ? r.data : [];
+    $('userChips').innerHTML = hs.length
+      ? '<span class="pl-sub" style="margin-bottom:4px">// 搜索历史(最多8条)</span>' +
+        hs.map(h => `<span class="user-chip" data-nick="${esc(h.nick)}" onclick="histSearch(this.dataset.nick)">${esc(h.nick)}</span>`).join('')
+      : '';
+  } catch (e) { /* 静默 */ }
+}
+function histSearch(nick) {
+  $('userKw').value = nick;
+  doUserSearch();
+}
 let upUid = null, upPage = 1, upLoading = false;
 function openUserModal() {
   $('userModal').classList.add('show');
   $('userKw').value = '';                      // 默认空,不聚焦不唤起输入法
-  $('userChips').innerHTML = '';
   $('userResults').innerHTML = '';
   $('userStatus').textContent = '// 输入昵称后点搜索';
   upUid = null;
+  refreshUrnHistory();                         // 载入搜索历史(最多8条)
 }
 function closeUserModal() { $('userModal').classList.remove('show'); }
 $('userModal').addEventListener('click', e => { if (e.target.id === 'userModal') closeUserModal(); });
@@ -3207,21 +3266,35 @@ async function doUserSearch() {
   const kw = $('userKw').value.trim();
   if (!kw) { toast('请输入用户昵称', 'warn'); return; }
   $('userStatus').textContent = '// 正在搜索用户…';
-  $('userChips').innerHTML = '';
   $('userResults').innerHTML = '';
   try {
     const r = await api(`/api/wy_user_search?kw=${encodeURIComponent(kw)}`);
     const us = r.code === 200 && r.data ? r.data : [];
     if (!us.length) { $('userStatus').textContent = '// 未找到该用户,换个关键词试试'; return; }
-    $('userStatus').textContent = `// 匹配到 ${us.length} 个用户,已载入第一位`;
-    $('userChips').innerHTML = us.map((u, i) =>
-      `<span class="user-chip${i === 0 ? ' on' : ''}" onclick="pickUser(${u.uid},this)">${esc(u.nick)}</span>`).join('');
-    pickUser(us[0].uid, document.querySelector('.user-chip'));
+    // 同名用户先列进弹窗列表让用户选(样式同歌单条目),不自动拉歌单
+    $('userStatus').textContent = us.length === 1
+      ? '// 找到该用户,点击载入其歌单'
+      : `// 匹配到 ${us.length} 个同名用户,请选择`;
+    renderUsers(us);
   } catch (e) { $('userStatus').textContent = '// 搜索失败,稍后再试'; }
 }
-async function pickUser(uid, chipEl) {
-  document.querySelectorAll('.user-chip').forEach(c => c.classList.toggle('on', c === chipEl));
+function renderUsers(users) {
+  $('userResults').innerHTML = users.map(u => `
+    <button class="pl-item" onclick="pickUser(${u.uid},'${esc(u.nick)}')">
+      ${u.avatar ? `<img class="pl-cover" src="${esc(u.avatar)}" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="pl-cover"></span>'}
+      <span class="pl-meta">
+        <span class="pl-name">${esc(u.nick)}</span>
+        <span class="pl-sub">用户 · 点击载入其歌单</span>
+      </span>
+    </button>`).join('');
+}
+async function pickUser(uid, nick) {
+  try {                                        // 写入 urn.json 历史(满8条FIFO轮换)
+    await api('/api/urn_add?nick=' + encodeURIComponent(nick));
+    refreshUrnHistory();
+  } catch (e) { /* 历史失败不影响主流程 */ }
   upUid = uid; upPage = 1;
+  $('userStatus').textContent = `// 正在载入「${nick}」的歌单…`;
   $('userResults').innerHTML = '<div style="text-align:center;padding:14px;color:#777;font-family:var(--mono);font-size:10px">歌单加载中…</div>';
   try {
     const r = await api(`/api/wy_user_playlists?uid=${uid}&page=1`);
@@ -3258,8 +3331,7 @@ async function loadMorePl() {
 function openUserPlaylist(btn) {
   const pid = String(btn.dataset.pid);       // 单独捕获歌单 id
   closeUserModal();
-  $('kw').value = pid;                        // 与主页搜索框同款:填入 id
-  runSearch(pid, 1, true);                    // 走主页 id 解析策略(自领 seq,纯数字≥6位→loadPlaylist 正确装载)
+  runSearch(pid, 1, true);                    // 主页 id 解析策略装载(不回填搜索框,不污染原关键词)
 }
 
 /* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============
