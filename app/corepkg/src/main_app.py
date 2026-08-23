@@ -2623,25 +2623,30 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   @media (hover:hover) { .dl-tag:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
 
-  /* ═══ C键·EQ弹窗(复用modal结构;行样式对齐评论条目,固定视口显示8行可下滑,隐藏滚动条) ═══ */
+  /* ═══ C键·EQ弹窗(布局完全对齐歌单弹窗:pl-item同款透明圆角卡片+间隔,字体统一缩小) ═══ */
   .eqbox { width:min(340px, 92vw); }
-  .eq-list {                               /* 固定高度=8行(基准25px×8),zoom后视觉仍1.5倍;弹窗内居中 */
-    margin-top:10px; zoom:1.5; max-width:100%;
-    height:200px; overflow-y:auto; overflow-x:hidden;
+  .eq-list {                               /* 固定视口高度≈8行可下滑;隐藏滚动条 */
+    margin-top:12px; max-width:100%;
+    height:266px; overflow-y:auto; overflow-x:hidden;
     overscroll-behavior:contain; scrollbar-width:none;
-    border-top:1px solid var(--glass-border); border-bottom:1px solid var(--glass-border);
   }
   .eq-list::-webkit-scrollbar { width:0; height:0; display:none; }
-  .eq-row {                                /* 对齐评论条目(cmt-item):全宽+细分割线,整齐滚动 */
-    display:flex; align-items:center; gap:8px; width:100%;
-    padding:4px 4px; border-bottom:1px solid rgba(255,255,255,.06);
-    cursor:pointer; user-select:none; text-align:left; box-sizing:border-box;
+  .eq-row {                                /* 歌单条目(pl-item)同款:透明圆角卡片+行间隔 */
+    display:flex; align-items:center; gap:9px; width:100%;
+    padding:7px 8px; margin-bottom:6px; box-sizing:border-box;
+    border-radius:var(--r-md); border:1px solid var(--glass-border);
+    background:rgba(255,255,255,.04); cursor:pointer; text-align:left;
+    transition:transform var(--t-press) var(--spring), background var(--t-press) ease;
   }
-  .eq-row:last-child { border-bottom:none; }
-  .eq-row:active { background:rgba(255,255,255,.06); }
-  .eq-name { flex:0 0 64px; font-size:11px; color:var(--text); font-family:var(--mono); }
+  .eq-row:last-child { margin-bottom:0; }
+  .eq-row:active { transform:scale(.98); background:rgba(194,12,12,.08); }
+  .eq-row.on { background:rgba(194,12,12,.08); border-color:rgba(236,65,65,.35); }
+  .eq-name {                               /* 字体全预设统一且缩小(原zoom后16.5px→8.5px) */
+    font-family:var(--mono); font-size:8.5px; color:var(--text-bright);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
-  .eq-mark { margin-left:auto; font-size:13px; color:#55555c; font-family:var(--mono); }   /* 替代原dB竖条图 */
+  .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:8.5px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
   .eq-row.on .eq-mark { color:var(--accent-hover); }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
@@ -3005,7 +3010,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 <div class="modal-mask" id="eqModal">
   <div class="modal-box eqbox">
     <button class="modal-x" onclick="closeEqModal()" title="关闭">○</button>
-    <div class="modal-title"><span>音效 EQ <em style="font-style:normal;font-size:9px;color:#77777f">100~10KHz · ±8dB</em></span></div>
+    <div class="modal-title">音效 EQ</div>
     <div class="eq-list" id="eqList"></div>
   </div>
 </div>
