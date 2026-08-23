@@ -312,6 +312,48 @@
   #cookieInput:focus { border-color:rgba(236,65,65,.65); box-shadow:0 0 0 3px rgba(236,65,65,.16); }
   .cookie-actions { display:flex; gap:8px; width:100%; margin-top:10px; }
   .cookie-actions .modal-btn { flex:1; margin-top:0; max-width:none; }
+
+  /* ═══ B键·用户歌单爬取弹窗 ═══ */
+  .user-search-row { display:flex; gap:6px; width:100%; margin-bottom:10px; }
+  #userKw {
+    flex:1; min-width:0; box-sizing:border-box; padding:7px 10px;
+    border-radius:var(--r-md); border:1px solid var(--glass-border);
+    background:rgba(16,16,18,.5); color:var(--text-bright);
+    font-family:var(--mono); font-size:11px; outline:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  #userKw:focus { border-color:rgba(236,65,65,.65); box-shadow:0 0 0 3px rgba(236,65,65,.16); }
+  /* 主界面搜索按钮同款缩小版 */
+  .mini-search {
+    padding:7px 12px; flex-shrink:0; border:none; cursor:pointer; user-select:none;
+    background:var(--grad-brand); color:#fff; font-size:10px; font-weight:600;
+    border-radius:var(--r-md);
+    box-shadow:0 3px 10px rgba(194,12,12,.4), inset 0 1px 0 rgba(255,255,255,.3);
+    transition:transform var(--t-press) var(--spring);
+  }
+  .mini-search:active { transform:scale(.94); }
+  .user-chip {
+    display:inline-block; margin:0 5px 5px 0; padding:4px 9px;
+    border-radius:99px; border:1px solid var(--glass-border);
+    background:rgba(255,255,255,.05); color:var(--text-bright);
+    font-family:var(--mono); font-size:9.5px; cursor:pointer;
+  }
+  .user-chip.on { border-color:rgba(236,65,65,.7); color:var(--accent-hover); }
+  .pl-item {
+    display:flex; align-items:center; gap:9px; width:100%;
+    padding:7px 8px; margin-bottom:6px; box-sizing:border-box;
+    border-radius:var(--r-md); border:1px solid var(--glass-border);
+    background:rgba(255,255,255,.04); cursor:pointer; text-align:left;
+    transition:transform var(--t-press) var(--spring), background var(--t-press) ease;
+  }
+  .pl-item:active { transform:scale(.98); background:rgba(194,12,12,.08); }
+  .pl-cover { width:34px; height:34px; border-radius:8px; object-fit:cover; flex-shrink:0; background:#222; }
+  .pl-meta { flex:1; min-width:0; }
+  .pl-name {
+    font-family:var(--mono); font-size:10.5px; color:var(--text-bright);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;
+  }
+  .pl-sub { font-family:var(--mono); font-size:8.5px; color:var(--muted); margin-top:2px; display:block; }
   .dl-tag:active { transform:scale(.9); }
   #mvModal .modal-box { width:min(340px, 88vw); }
   .modal-box video {
@@ -571,6 +613,22 @@
   </div>
 </div>
 
+<div class="modal-mask" id="userModal">
+  <div class="modal-box">
+    <button class="modal-x" onclick="closeUserModal()" title="关闭">○</button>
+    <div class="modal-title">网易云用户 · 歌单爬取</div>
+    <div class="qr-scroll">
+      <div class="user-search-row">
+        <input id="userKw" type="text" autocomplete="off" spellcheck="false" placeholder="输入用户昵称" onkeydown="if(event.key==='Enter')doUserSearch()">
+        <button class="mini-search" onclick="doUserSearch()">搜索</button>
+      </div>
+      <div class="qr-status" id="userStatus">// 输入昵称后点搜索</div>
+      <div id="userChips"></div>
+      <div id="userResults"></div>
+    </div>
+  </div>
+</div>
+
 <!-- 常驻下载任务面板:有任务时常挂页面、点标题可收缩、全部结束自动隐藏;
      点击已完成条目可复制完整保存路径 -->
 <div id="dlPanel" class="hidden">
@@ -802,7 +860,8 @@ $('quickBar').addEventListener('click', e => {
   const b = e.target.closest('button[data-fn]');
   if (!b) return;
   const fn = b.dataset.fn;
-  if (fn === 'A') { openCookieModal(); return; }   // A:网易云扫码登录·最后兑底
+  if (fn === 'A') { openCookieModal(); return; }   // ㉿:扫码登录兑底
+  if (fn === 'B') { openUserModal(); return; }     // B:用户歌单爬取
   toast(`「${fn}」功能预留位,待接入`, 'info', 1500);
 });
 
@@ -880,6 +939,77 @@ async function saveCookieInput() {
             r.data.saved ? 'success' : 'warn', 2500);
     } else toast('保存失败:' + (r.message || ''), 'error');
   } catch (e) { toast('保存失败', 'error'); }
+}
+
+/* ═══ B键·用户歌单爬取(官方接口→移交主列表正常播放/下载) ═══ */
+function fmtWan(n) { n = n || 0; return n >= 10000 ? (n / 10000).toFixed(1) + '万' : String(n); }
+let upUid = null, upPage = 1, upLoading = false;
+function openUserModal() {
+  $('userModal').classList.add('show');
+  $('userKw').value = '';                      // 默认空,不聚焦不唤起输入法
+  $('userChips').innerHTML = '';
+  $('userResults').innerHTML = '';
+  $('userStatus').textContent = '// 输入昵称后点搜索';
+  upUid = null;
+}
+function closeUserModal() { $('userModal').classList.remove('show'); }
+$('userModal').addEventListener('click', e => { if (e.target.id === 'userModal') closeUserModal(); });
+
+async function doUserSearch() {
+  const kw = $('userKw').value.trim();
+  if (!kw) { toast('请输入用户昵称', 'warn'); return; }
+  $('userStatus').textContent = '// 正在搜索用户…';
+  $('userChips').innerHTML = '';
+  $('userResults').innerHTML = '';
+  try {
+    const r = await api(`/api/wy_user_search?kw=${encodeURIComponent(kw)}`);
+    const us = r.code === 200 && r.data ? r.data : [];
+    if (!us.length) { $('userStatus').textContent = '// 未找到该用户,换个关键词试试'; return; }
+    $('userStatus').textContent = `// 匹配到 ${us.length} 个用户,已载入第一位`;
+    $('userChips').innerHTML = us.map((u, i) =>
+      `<span class="user-chip${i === 0 ? ' on' : ''}" onclick="pickUser(${u.uid},this)">${esc(u.nick)}</span>`).join('');
+    pickUser(us[0].uid, document.querySelector('.user-chip'));
+  } catch (e) { $('userStatus').textContent = '// 搜索失败,稍后再试'; }
+}
+async function pickUser(uid, chipEl) {
+  document.querySelectorAll('.user-chip').forEach(c => c.classList.toggle('on', c === chipEl));
+  upUid = uid; upPage = 1;
+  $('userResults').innerHTML = '<div style="text-align:center;padding:14px;color:#777;font-family:var(--mono);font-size:10px">歌单加载中…</div>';
+  try {
+    const r = await api(`/api/wy_user_playlists?uid=${uid}&page=1`);
+    if (r.code !== 200) { $('userStatus').textContent = '// 歌单拉取失败:' + (r.message || ''); return; }
+    renderPlaylists(r.data.list, r.data.more);
+  } catch (e) { $('userStatus').textContent = '// 网络异常'; }
+}
+function renderPlaylists(list, more) {
+  if (!list.length && upPage === 1) {
+    $('userResults').innerHTML = '<div style="text-align:center;padding:14px;color:#777;font-family:var(--mono);font-size:10px">该用户暂无公开歌单</div>';
+    return;
+  }
+  const html = list.map(p => `
+    <button class="pl-item" data-pid="${p.id}" onclick="openUserPlaylist(this)">
+      ${p.cover ? `<img class="pl-cover" src="${esc(p.cover)}" loading="lazy" onerror="this.style.visibility='hidden'">` : ''}
+      <span class="pl-meta">
+        <span class="pl-name">${esc(p.name)}</span>
+        <span class="pl-sub">${p.count} 首 · 播放 ${fmtWan(p.plays)}</span>
+      </span>
+    </button>`).join('');
+  const moreBtn = more
+    ? `<button class="user-chip" style="width:100%;padding:7px 0;text-align:center;margin:0" onclick="loadMorePl()">加载更多</button>` : '';
+  if (upPage === 1) $('userResults').innerHTML = html + moreBtn;
+  else { const ob = document.getElementById('plMoreBtn'); if (ob) ob.remove(); $('userResults').insertAdjacentHTML('beforeend', html + moreBtn); }
+}
+async function loadMorePl() {
+  if (!upUid || upLoading) return;
+  upLoading = true; upPage++;
+  try {
+    const r = await api(`/api/wy_user_playlists?uid=${upUid}&page=${upPage}`);
+    if (r.code === 200) renderPlaylists(r.data.list, r.data.more);
+  } catch (e) { /* 静默,下轮再试 */ } finally { upLoading = false; }
+}
+function openUserPlaylist(btn) {
+  loadPlaylist(String(btn.dataset.pid));   // 移交给主列表:后续播放/下载走正常流程
+  closeUserModal();
 }
 
 /* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============

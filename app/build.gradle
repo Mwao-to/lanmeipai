@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 38
-        versionName '3.25'   // 提示条紧凑化(250px/11px,文本不断行不截断)+登录键改㉿
+        versionCode 39
+        versionName '3.26'   // B键:网易云用户歌单爬取(昵称搜用户→歌单竖排→移交主列表)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
