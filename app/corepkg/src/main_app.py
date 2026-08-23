@@ -2058,14 +2058,24 @@ def api_wy_user_search():
         return jsonify({'code': 400, 'message': '缺少关键词'})
     try:
         from urllib.parse import quote
-        resp = _wy_web_get(f'/api/search/get/web?s={quote(kw)}&type=1002&limit=8&offset=0')
-        body = resp['body']
-        ups = []
-        if isinstance(body, dict):
-            ups = ((body.get('result') or {}).get('userprofiles')) or []
-        users = [{'uid': u.get('userId'), 'nick': u.get('nickname') or '(无名)',
-                  'avatar': u.get('avatarUrl') or ''}
-                 for u in ups if u.get('userId')]
+        users, seen, offset = [], set(), 0
+        for _ in range(12):                       # 每页30,上限360人(同名词极端情形兑底)
+            resp = _wy_web_get(f'/api/search/get/web?s={quote(kw)}&type=1002&limit=30&offset={offset}')
+            body = resp['body']
+            ups = ((body.get('result') or {}).get('userprofiles')) or [] if isinstance(body, dict) else []
+            if not ups:
+                break
+            fresh = 0
+            for u in ups:
+                uid_ = u.get('userId')
+                if uid_ and uid_ not in seen:     # 同名不同 uid 全部保留
+                    seen.add(uid_)
+                    users.append({'uid': uid_, 'nick': u.get('nickname') or '(无名)',
+                                  'avatar': u.get('avatarUrl') or ''})
+                    fresh += 1
+            if fresh == 0 or len(ups) < 30:       # 无新增或已到末页即停
+                break
+            offset += 30
         return jsonify({'code': 200, 'data': users})
     except Exception as e:
         return jsonify({'code': 500, 'message': str(e)})
@@ -2998,7 +3008,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   <div class="modal-box">
     <button class="modal-x" onclick="closeUserModal()" title="关闭">○</button>
     <div class="modal-title">网易云用户 · 歌单</div>
-    <div class="qr-scroll">
+    <div class="qr-scroll" id="userScroll">
       <div class="user-search-row">
         <input id="userKw" type="text" autocomplete="off" spellcheck="false" placeholder="输入用户昵称" onkeydown="if(event.key==='Enter')doUserSearch()">
         <button class="mini-search" onclick="doUserSearch()">搜索</button>
@@ -3359,7 +3369,7 @@ function histSearch(nick) {
   $('userKw').value = nick;
   doUserSearch();
 }
-let upUid = null, upPage = 1, upLoading = false;
+let upUid = null, upPage = 1, upLoading = false, upMore = false;
 function openUserModal() {
   $('userModal').classList.add('show');
   $('userKw').value = '';                      // 默认空,不聚焦不唤起输入法
@@ -3402,9 +3412,10 @@ async function pickUser(uid, nick) {
     await api('/api/urn_add?nick=' + encodeURIComponent(nick));
     refreshUrnHistory();
   } catch (e) { /* 历史失败不影响主流程 */ }
-  upUid = uid; upPage = 1;
+  upUid = uid; upPage = 1; upMore = false;   // 重置预加载链状态
   $('userStatus').textContent = `// 正在载入「${nick}」的歌单…`;
   $('userResults').innerHTML = '<div style="text-align:center;padding:14px;color:#777;font-family:var(--mono);font-size:10px">歌单加载中…</div>';
+  const sc = $('userScroll'); if (sc) sc.onscroll = null;
   try {
     const r = await api(`/api/wy_user_playlists?uid=${uid}&page=1`);
     if (r.code !== 200) { $('userStatus').textContent = '// 歌单拉取失败:' + (r.message || ''); return; }
@@ -3412,6 +3423,7 @@ async function pickUser(uid, nick) {
   } catch (e) { $('userStatus').textContent = '// 网络异常'; }
 }
 function renderPlaylists(list, more) {
+  upMore = !!more;
   if (!list.length && upPage === 1) {
     $('userResults').innerHTML = '<div style="text-align:center;padding:14px;color:#777;font-family:var(--mono);font-size:10px">该用户暂无公开歌单</div>';
     return;
@@ -3424,18 +3436,31 @@ function renderPlaylists(list, more) {
         <span class="pl-sub">${p.count} 首 · 播放 ${fmtWan(p.plays)}</span>
       </span>
     </button>`).join('');
-  const moreBtn = more
-    ? `<button class="user-chip" style="width:100%;padding:7px 0;text-align:center;margin:0" onclick="loadMorePl()">加载更多</button>` : '';
-  if (upPage === 1) $('userResults').innerHTML = html + moreBtn;
-  else { const ob = document.getElementById('plMoreBtn'); if (ob) ob.remove(); $('userResults').insertAdjacentHTML('beforeend', html + moreBtn); }
+  if (upPage === 1) $('userResults').innerHTML = html;          // 不再有「加载更多」按钮
+  else $('userResults').insertAdjacentHTML('beforeend', html);
+  armPlPreload();                                               // 预加载链接管续页
+}
+/* 歌单预加载:滚动到底自动续页;未撑满容器则直接后台补页(与主列表策略一致) */
+function armPlPreload() {
+  const sc = $('userScroll');
+  sc.onscroll = () => {
+    if (!upMore || upLoading) return;
+    if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 40) { sc.onscroll = null; loadMorePl(); }
+  };
+  requestAnimationFrame(() => {
+    if (upMore && !upLoading && sc.scrollHeight <= sc.clientHeight + 40) {
+      sc.onscroll = null; loadMorePl();
+    }
+  });
 }
 async function loadMorePl() {
-  if (!upUid || upLoading) return;
+  if (!upUid || upLoading || !upMore) return;
   upLoading = true; upPage++;
   try {
     const r = await api(`/api/wy_user_playlists?uid=${upUid}&page=${upPage}`);
-    if (r.code === 200) renderPlaylists(r.data.list, r.data.more);
-  } catch (e) { /* 静默,下轮再试 */ } finally { upLoading = false; }
+    if (r.code === 200 && r.data.list && r.data.list.length) renderPlaylists(r.data.list, r.data.more);
+    else upMore = false;                        // 空页/异常:终止预加载链
+  } catch (e) { upPage--; /* 静默,下轮滚动再试 */ } finally { upLoading = false; }
 }
 function openUserPlaylist(btn) {
   const pid = String(btn.dataset.pid);       // 单独捕获歌单 id

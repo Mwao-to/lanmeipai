@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 46
-        versionName '3.33'   // 弹窗遮罩inset兼容修复(旧WebView穿透)+封面恢复210px+热门标题〄+评论钮固定最右
+        versionCode 47
+        versionName '3.34'   // 用户搜索翻页抓全(去8人上限)+歌单弹窗去加载更多按钮改预加载链
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
