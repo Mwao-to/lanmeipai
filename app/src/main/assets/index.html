@@ -252,13 +252,8 @@
     border:1px solid rgba(255,214,10,.35); border-radius:4px; padding:0 5px;
     font-family:var(--mono); flex-shrink:0;
   }
-  /* ---- 内置隐藏式进度条(位于播放器内部上方,点空白处显示/隐藏,收起时不占空间) ---- */
-  .p-seekrow {
-    display:flex; align-items:center; gap:10px;
-    max-height:0; opacity:0; overflow:hidden; margin-bottom:0;
-    transition:max-height .3s var(--ease-out), opacity .18s ease, margin-bottom .28s var(--ease-out);
-  }
-  .p-seekrow.open { max-height:26px; opacity:1; margin-bottom:9px; }
+  /* ---- 内置常驻进度条(位于播放器内部上方,始终显示) ---- */
+  .p-seekrow { display:flex; align-items:center; gap:10px; margin-bottom:9px; }
   .p-seekrow .p-bar { cursor:pointer; touch-action:none; }
   .p-fill.dragging { transition:none; }   /* 拖拽跟手:拖动中禁用width过渡 */
   .p-bar { flex:1; height:5px; background:rgba(255,255,255,.09); border-radius:3px; overflow:visible; box-shadow:inset 0 1px 2px rgba(0,0,0,.5); }
@@ -553,7 +548,7 @@
     .song .idx, .song .name, .song .singer { font-size:11.5px; }
   }
   @media (max-width:600px) {
-    .p-seekrow.open { margin-bottom:7px; }
+    .p-seekrow { margin-bottom:6px; }
     .player-card { padding:9px 12px; gap:9px; border-radius:20px; }
     .play-btn { width:38px; height:38px; }
   }
@@ -610,8 +605,8 @@
 </div>
 
 <div class="player">
-  <div class="player-card" onclick="toggleSeek(event)">
-    <div class="p-seekrow" id="seekRow">
+  <div class="player-card">
+    <div class="p-seekrow">
       <span class="p-time" id="nowTime">00:00</span>
       <div class="p-bar" id="seekBar"><div class="p-fill" id="progFill"></div></div>
       <span class="p-time" id="durTime">00:00</span>
@@ -624,6 +619,7 @@
       </div>
       <button class="dl-tag" id="mvTag" style="display:none" onclick="openMvModal()" title="播放/下载 MV">MV</button>
       <button class="dl-tag" onclick="openDlModal()" title="下载歌曲/歌词">下载</button>
+      <button class="dl-tag" onclick="shareSong()" title="分享当前歌曲官方链接">分享</button>
     </div>
   </div>
 </div>
@@ -1699,11 +1695,6 @@ function togglePlay() {
   if (a.paused) a.play().catch(() => toast('无法播放', 'error'));
   else a.pause();
 }
-/* ---- 点播放器空白处:显示/隐藏内部上方的进度条(播放/下载等按钮点击不触发) ---- */
-function toggleSeek(e) {
-  if (e.target.closest('button')) return;
-  $('seekRow').classList.toggle('open');
-}
 /* ---- 进度条拖拽跟手:视觉宽度每次move立即更新(拖动中关闭width过渡),
         音频currentTime按≥150ms节流提交 —— 避免连续seek阻塞主线程导致动画停滞 ---- */
 (function () {
@@ -1750,6 +1741,16 @@ $('audio').addEventListener('loadedmetadata', updateProg);
 $('audio').addEventListener('play', () => $('btnPlay').innerHTML = ICON_PAUSE);
 $('audio').addEventListener('pause', () => $('btnPlay').innerHTML = ICON_PLAY);
 $('btnPlay').innerHTML = ICON_PLAY;
+
+/* ---- 分享:把当前播放歌曲的网易云官方单曲链接填入主页搜索框(kw),可直接回车解析或再编辑发送 ---- */
+function shareSong() {
+  if (!state.song || !state.song.songmid) { toast('还没有播放中的歌曲', 'warn'); return; }
+  const url = 'https://music.163.com/song?id=' + state.song.songmid;
+  const inp = $('kw');
+  inp.value = url;
+  try { inp.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) { }
+  toast('官方链接已填入搜索框', 'success');
+}
 
 /* ============ 下载(弹窗选择 歌曲/歌词) ============ */
 const safeName = n => (n || '未知').replace(/[\\/:*?"<>|]/g, '_').trim();
