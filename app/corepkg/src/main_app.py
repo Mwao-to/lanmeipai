@@ -2624,10 +2624,11 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   @media (hover:hover) { .dl-tag:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
 
   /* ═══ C键·EQ弹窗(布局完全对齐歌单弹窗:pl-item同款透明圆角卡片+间隔,字体统一缩小) ═══ */
-  .eqbox { width:min(340px, 92vw); padding-left:15px; padding-right:15px; }   /* 左右内边距各15px:列表内容宽=弹窗长-30 */
-  .eq-list {                               /* 固定视口高度≈9行可下滑(加大一点);隐藏滚动条 */
+  .eqbox { width:min(340px, 92vw); padding-left:15px; padding-right:15px; }
+  .eq-list {                               /* 与弹窗等长(负外边距抵消内缩)+与歌单列表同高规格(max-height:56vh) */
     margin-top:12px; max-width:100%;
-    height:300px; overflow-y:auto; overflow-x:hidden;
+    margin-left:-15px; margin-right:-15px;
+    max-height:56vh; overflow-y:auto; overflow-x:hidden;
     overscroll-behavior:contain; scrollbar-width:none;
   }
   .eq-list::-webkit-scrollbar { width:0; height:0; display:none; }
