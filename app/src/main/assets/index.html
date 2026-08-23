@@ -1008,8 +1008,10 @@ async function loadMorePl() {
   } catch (e) { /* 静默,下轮再试 */ } finally { upLoading = false; }
 }
 function openUserPlaylist(btn) {
-  loadPlaylist(String(btn.dataset.pid));   // 移交给主列表:后续播放/下载走正常流程
+  const pid = String(btn.dataset.pid);       // 单独捕获歌单 id
   closeUserModal();
+  $('kw').value = pid;                        // 与主页搜索框同款:填入 id
+  runSearch(pid, 1, true);                    // 走主页 id 解析策略(自领 seq,纯数字≥6位→loadPlaylist 正确装载)
 }
 
 /* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============
