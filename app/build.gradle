@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 61
-        versionName '3.48'   // EQ弹窗改固定视口滚动布局(显示8行可下滑,隐藏滚动条,行样式对齐评论条目);超重低音配方去浑浊(200~400Hz堆积削减);预设选择持久化到私有目录eqw.json(新增eqSave/eqLoad桥,启动时文件优先恢复)
+        versionCode 62
+        versionName '3.49'   // EQ弹窗:删「上次预设待生效」提示,改为启动读eqw.json自动沿用预设(播放时建链填参+play事件resume上下文)并弹「当前使用EQ：xx，已生效」;预设行右侧dB竖条图替换为㉿标记
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

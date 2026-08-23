@@ -296,12 +296,8 @@
   .eq-row:active { background:rgba(255,255,255,.06); }
   .eq-name { flex:0 0 64px; font-size:11px; color:var(--text); font-family:var(--mono); }
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
-  .eq-bars {
-    flex:1; height:16px; display:flex; align-items:flex-end;
-    justify-content:flex-end; gap:2px;
-  }
-  .eq-bars i { width:5px; background:rgba(255,255,255,.18); border-radius:1px; }
-  .eq-row.on .eq-bars i { background:var(--accent-hover); }
+  .eq-mark { margin-left:auto; font-size:13px; color:#55555c; font-family:var(--mono); }   /* 替代原dB竖条图 */
+  .eq-row.on .eq-mark { color:var(--accent-hover); }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
    * 外层容器观感对齐主列表(.panel):同圆角(--r-md)、同底色透明度(--glass-regular);
@@ -1714,6 +1710,7 @@ async function play(i, list) {
     setPlayerLine($('nowName'), `${esc(song.name)}${viaTag}`);   // 歌名+VIP标签作为整体跑马灯
     if (r.data.via === 'toubiec') toast(`已通过VIP通道播放「${song.name}」`, 'warn', 3000);
     if (localStorage.getItem('eqArmed')) audio.crossOrigin = 'anonymous';   // EQ启用过:以CORS模式加载(WebAudio采集必需,CDN已实测ACAO:*)
+    maybeAutoBuildEq();                    // 启动遗留的自动预设在此建链填参
     audio.src = r.data.url;
     audio.play().catch(() => { });   // 自动播放被拦截时静默,用户手动点击播放即可
   } catch (e) {
@@ -1869,6 +1866,7 @@ const EQ_PRESETS = {
 };
 let eqCtx = null, eqFilters = null;
 let eqActiveName = '正常';
+let pendingAutoEq = null;                  // 启动待自动沿用的预设(非「正常」才有值)
 (function restoreEq() {                    // 恢复上次预设:私有目录eqw.json优先,localStorage兑底
   try { const ls = localStorage.getItem('eqPreset'); if (ls && EQ_PRESETS[ls]) eqActiveName = ls; } catch (e) { }
   try {
@@ -1881,7 +1879,22 @@ let eqActiveName = '正常';
       }
     }
   } catch (e) { }
+  if (eqActiveName !== '正常') {           // 上次用了预设:本次启动自动沿用,弹提示告知
+    pendingAutoEq = eqActiveName;
+    localStorage.setItem('eqArmed', '1');  // 之后每次播放前都以CORS模式挂src
+    setTimeout(() => toast(`当前使用EQ：${eqActiveName}，已生效`, 'success', 2600), 600);
+  }
 })();
+function maybeAutoBuildEq() {              // 播放路径上确保启动遗留的自动预设链就绪并填参
+  if (!pendingAutoEq || eqCtx) return;
+  if (!ensureEqChain()) { pendingAutoEq = null; return; }
+  (EQ_PRESETS[pendingAutoEq] || EQ_PRESETS['正常']).forEach((db, i) => { eqFilters[i].gain.value = clampDb(db); });
+  pendingAutoEq = null;
+  renderEqList();
+}
+audio.addEventListener('play', () => {     // 自动播放策略:播放事件里恢复被挂起的EQ上下文
+  if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume().catch(() => { });
+});
 const clampDb = v => Math.max(-8, Math.min(8, Number(v) || 0));
 
 function eqCorsReload() {                        // 正在播的歌要以CORS模式重载(仅首次激活)
@@ -1922,6 +1935,7 @@ function ensureEqChain() {
 async function applyEq(name) {
   const vals = EQ_PRESETS[name];
   if (!vals) return;
+  pendingAutoEq = null;                    // 手动选择后不再走启动自动路径
   if (name !== '正常' && !eqCtx && !ensureEqChain()) return;
   if (eqCtx) {
     if (eqCtx.state === 'suspended') { try { await eqCtx.resume(); } catch (e) { } }
@@ -1935,16 +1949,13 @@ async function applyEq(name) {
 }
 function renderEqList() {
   $('eqList').innerHTML = Object.keys(EQ_PRESETS).map(n => {
-    const bars = EQ_PRESETS[n]
-      .map(v => `<i style="height:${Math.max(6, Math.round((clampDb(v) + 8) / 16 * 100))}%"></i>`).join('');
     return `<div class="eq-row${n === eqActiveName ? ' on' : ''}" onclick="applyEq('${n}')">`
-      + `<span class="eq-name">${n}</span><span class="eq-bars" title="100/200/400/800/1K/3K/6K/10K Hz">${bars}</span></div>`;
+      + `<span class="eq-name">${n}</span><span class="eq-mark">㉿</span></div>`;
   }).join('');
 }
 function openEqModal() {
   renderEqList();
   $('eqModal').classList.add('show');
-  if (!eqCtx && eqActiveName !== '正常') toast(`上次EQ「${eqActiveName}」待生效：点击该预设即启用`, 'info', 2500);
 }
 function closeEqModal() { $('eqModal').classList.remove('show'); }
 $('eqModal').addEventListener('click', e => { if (e.target.id === 'eqModal') closeEqModal(); });
