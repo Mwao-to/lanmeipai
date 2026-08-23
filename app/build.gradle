@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 55
-        versionName '3.42'   // 分享成功提示去重(仅页面Toast一次);五键快捷条外层容器对齐列表(--r-md圆角/--glass-regular底色/上边距40px);下载弹窗点封面下载当前歌曲封面图(命名同歌曲,后缀统一.jpg)
+        versionCode 56
+        versionName '3.43'   // 五键快捷条上边距回滚40px→10px(其余圆角/底色对齐列表的改动保留)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
