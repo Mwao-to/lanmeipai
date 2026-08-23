@@ -360,7 +360,7 @@ public class MainActivity extends Activity {
                 }
                 Dbg.w(MainActivity.this, "[ime] 静默复制完成 clipboard=" + ok
                     + " len=" + (text == null ? 0 : text.length()));
-                toast(MainActivity.this, ok ? "复制歌曲分享链接成功" : "复制失败");
+                // 提示由页面 JS 统一弹出(复制歌曲分享链接成功),原生不再重复 Toast
             });
         }
     }
@@ -713,6 +713,7 @@ public class MainActivity extends Activity {
         if (n.endsWith(".m4a")) return "audio/mp4";
         if (n.endsWith(".aac")) return "audio/aac";
         if (n.endsWith(".mp4")) return "video/mp4";
+        if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
         if (n.endsWith(".lrc") || n.endsWith(".txt")) return "text/plain";
         return "application/octet-stream";
     }

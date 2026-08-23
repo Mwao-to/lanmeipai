@@ -279,14 +279,15 @@
   @media (hover:hover) { .dl-tag:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
-   * 容器与播放器同圆角(--r-xl)同玻璃质感;宽度为播放器一半(小 1 倍)且横向居中;
+   * 外层容器观感对齐主列表(.panel):同圆角(--r-md)、同底色透明度(--glass-regular);
+   * 上边距40px(原10px+30)与列表留出间隔空白;
    * 内部 5 键等权 1:1,透明药丸+红字(与播放器下载标签同配色) */
   .quick-bar {
     display:flex; gap:8px; align-items:center;
-    width:100%; max-width:680px; margin-top:10px; margin-left:auto; margin-right:auto;   /* 上距主列表10px */
+    width:100%; max-width:680px; margin-top:40px; margin-left:auto; margin-right:auto;   /* 上距主列表40px */
     padding:8px; box-sizing:border-box;
-    background:linear-gradient(165deg, rgba(46,46,52,.6), rgba(24,24,28,.68));
-    border:1px solid rgba(255,255,255,.11); border-radius:var(--r-xl);
+    background:var(--glass-regular);
+    border:1px solid var(--glass-border); border-radius:var(--r-md);
     box-shadow:0 8px 24px rgba(0,0,0,.4), var(--hi-top);
   }
   .quick-bar button {
@@ -1773,7 +1774,7 @@ function openDlModal() {
   $('dlSongName').textContent = `${state.song.name} - ${state.song.singer}`;   // 标题显示当前歌曲,单行超出截断为...
   const box = $('dlCoverBox');                       // 封面预览:与下载按钮同宽的 1:1 圆角图
   box.innerHTML = state.song.img
-    ? `<img src="${esc(state.song.img)}" alt="cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\'nocover\'>封面加载失败</div>'">`
+    ? `<img src="${esc(state.song.img)}" alt="cover" loading="lazy" style="cursor:pointer" title="点击下载封面(.jpg)" onclick="downloadCover()" onerror="this.parentElement.innerHTML='<div class=\'nocover\'>封面加载失败</div>'">`
     : '<div class="nocover">无封面</div>';
   $('dlModal').classList.add('show');
 }
@@ -1792,6 +1793,13 @@ function triggerDownload(href, filename, revoke) {
 
 /* 无端口模式下载出口:大文件交原生 DownloadManager 直链下载,
  * 小文本由桥直接写入公共 Download 目录;桌面浏览器仍走 <a download> 兑底 */
+/* ---- 点击下载弹窗封面:下载当前歌曲封面图到歌曲同目录,命名规则与歌曲一致,后缀统一 .jpg ---- */
+function downloadCover() {
+  const s = state.song;
+  if (!s || !s.img) { toast('当前歌曲没有封面', 'warn'); return; }
+  nativeDownload(`${safeName(s.name)}-${safeName(s.singer)}.jpg`, s.img);
+}
+
 function nativeDownload(filename, url) {
   if (window.AndroidBridge && AndroidBridge.download) AndroidBridge.download(filename, url);
   else triggerDownload(url, filename, false);
