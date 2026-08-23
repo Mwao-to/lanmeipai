@@ -371,9 +371,6 @@ public class MainActivity extends Activity {
             + "," + JSONObject.quote(detail == null ? "" : detail) + ")");
     }
 
-            });
-    }
-
     /** 探测目标是否支持 Range 分块(断点续传)并获取总大小,返回 {支持?1:0, 总大小或-1}。 */
     private static long[] probeUrl(String url) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
