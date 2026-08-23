@@ -2146,6 +2146,38 @@ def api_urn_clear():
             ok = False
     return jsonify({'code': 200, 'data': {'removed': ok}})
 
+# ═══ @键·当前歌曲评论区(官方接口 R_SO_4_{songId}) ═══
+@app.get('/api/comments')
+def api_comments():
+    """拉取当前播放歌曲的评论区(热评+新评,分页)。"""
+    _ensure_init()
+    songmid = (request.args.get('songmid') or '').strip()
+    if not songmid.isdigit():
+        return jsonify({'code': 400, 'message': '缺少 songmid'})
+    page = max(int(request.args.get('page', 1) or 1), 1)
+    limit = 20
+    offset = (page - 1) * limit
+    try:
+        resp = _wy_web_get(f'/api/v1/resource/comments/R_SO_4_{songmid}?limit={limit}&offset={offset}')
+        body = resp['body']
+        if not isinstance(body, dict):
+            return jsonify({'code': 500, 'message': '评论数据异常'})
+        def _map(c):
+            u = c.get('user') or {}
+            return {'nick': u.get('nickname') or '匿名',
+                    'avatar': u.get('avatarUrl') or '',
+                    'content': (c.get('content') or '').strip(),
+                    'time': c.get('time') or 0,          # 毫秒时间戳
+                    'likes': c.get('likedCount') or 0}
+        hot = [_map(c) for c in (body.get('hotComments') or [])]
+        new = [_map(c) for c in (body.get('comments') or [])]
+        return jsonify({'code': 200, 'data': {
+            'total': body.get('total') or 0,
+            'more': bool(body.get('more')),
+            'list': (hot + new) if page == 1 else new}})
+    except Exception as e:
+        return jsonify({'code': 500, 'message': str(e)})
+
 @app.post('/api/cookie')
 def api_set_cookie():
     """设置网易云 Cookie(如 MUSIC_U=xxx),可选"""
@@ -2669,6 +2701,25 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     transition:transform var(--t-press) var(--spring);
   }
   .urn-clear:active { transform:scale(.9); }
+
+  /* ═══ @键·歌曲评论弹窗 ═══ */
+  #cmtScroll { width:100%; }
+  .cmt-item {
+    display:flex; gap:8px; width:100%; padding:8px 2px;
+    border-bottom:1px solid rgba(255,255,255,.06); text-align:left; box-sizing:border-box;
+  }
+  .cmt-item:last-child { border-bottom:none; }
+  .cmt-avatar {
+    width:30px; height:30px; border-radius:50%; object-fit:cover;
+    flex-shrink:0; background:#222;
+  }
+  .cmt-body { flex:1; min-width:0; }
+  .cmt-nick { font-family:var(--mono); font-size:9px; color:var(--muted); display:block; }
+  .cmt-content {
+    font-family:var(--mono); font-size:10.5px; color:var(--text-bright);
+    line-height:1.5; margin-top:3px; word-break:break-word; white-space:pre-wrap;
+  }
+  .cmt-foot { display:flex; gap:12px; margin-top:4px; font-family:var(--mono); font-size:8.5px; color:var(--muted); }
   .dl-tag:active { transform:scale(.9); }
   #mvModal .modal-box { width:min(340px, 88vw); }
   .modal-box video {
@@ -2856,7 +2907,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
       </div>
     </div>
     <div class="col">
-      <h3 class="panel-title">列表 PLAYLIST <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button><button id="srcToggle" type="button" title="切换 歌单/单曲 数据" style="display:none">♫</button></span></h3>
+      <h3 class="panel-title">列表 PLAYLIST <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button><button id="cmtToggle" type="button" title="当前歌曲评论">@</button><button id="srcToggle" type="button" title="切换 歌单/单曲 数据" style="display:none">♫</button></span></h3>
       <div class="panel" id="resultPanel">
         <div class="empty" id="resultEmpty">ᕙ(  •̀ ᗜ •́  )ᕗ</div>
         <div id="resultBody"></div>
@@ -2940,6 +2991,16 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
       <div class="qr-status" id="userStatus">// 输入昵称后点搜索</div>
       <div id="userChips"></div>
       <div id="userResults"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="cmtModal">
+  <div class="modal-box">
+    <button class="modal-x" onclick="closeCmtModal()" title="关闭">○</button>
+    <div class="modal-title">歌曲评论 <span id="cmtTotal" style="font-size:9px;color:var(--muted)"></span></div>
+    <div class="qr-scroll" id="cmtScroll">
+      <div id="cmtList"></div>
     </div>
   </div>
 </div>
@@ -3364,6 +3425,67 @@ function openUserPlaylist(btn) {
   const pid = String(btn.dataset.pid);       // 单独捕获歌单 id
   closeUserModal();
   runSearch(pid, 1, true);                    // 主页 id 解析策略装载(不回填搜索框,不污染原关键词)
+}
+
+/* ═══ @键·当前歌曲评论区(官方接口→弹窗竖排) ═══ */
+let cmtPage = 1, cmtLoading = false, cmtMore = true;
+function openCmtModal() {
+  if (!state.song) { toast('还没有播放中的歌曲', 'warn'); return; }
+  $('cmtModal').classList.add('show');
+  cmtPage = 1; cmtMore = true;
+  $('cmtTotal').textContent = '';
+  $('cmtList').innerHTML = '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">评论加载中…</div>';
+  loadComments();
+}
+function closeCmtModal() { $('cmtModal').classList.remove('show'); }
+$('cmtModal').addEventListener('click', e => { if (e.target.id === 'cmtModal') closeCmtModal(); });
+$('cmtToggle').addEventListener('click', openCmtModal);
+function fmtCmtTime(ms) {
+  if (!ms) return '';
+  const d = new Date(ms), p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+async function loadComments() {
+  if (cmtLoading || !cmtMore) return;
+  const sid = state.song ? (state.song.songmid || (state.song.meta || {}).songId) : '';
+  if (!sid) {
+    $('cmtList').innerHTML = '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">当前歌曲缺少 id</div>';
+    return;
+  }
+  cmtLoading = true;
+  try {
+    const r = await api(`/api/comments?songmid=${encodeURIComponent(sid)}&page=${cmtPage}`);
+    if (r.code !== 200) {
+      $('cmtList').innerHTML = `<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">${esc(r.message || '加载失败')}</div>`;
+      return;
+    }
+    const list = r.data.list || [];
+    $('cmtTotal').textContent = `· 共 ${fmtWan(r.data.total)} 条`;
+    cmtMore = !!r.data.more;
+    const html = list.map(c => `
+      <div class="cmt-item">
+        ${c.avatar ? `<img class="cmt-avatar" src="${esc(c.avatar)}" loading="lazy" onerror="this.style.visibility='hidden'">` : '<span class="cmt-avatar"></span>'}
+        <div class="cmt-body">
+          <span class="cmt-nick">${esc(c.nick)}</span>
+          <div class="cmt-content">${esc(c.content)}</div>
+          <div class="cmt-foot"><span>${fmtCmtTime(c.time)}</span><span>♡ ${fmtWan(c.likes)}</span></div>
+        </div>
+      </div>`).join('');
+    if (cmtPage === 1)
+      $('cmtList').innerHTML = html || '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">暂无评论</div>';
+    else
+      $('cmtList').insertAdjacentHTML('beforeend', html);
+    if (cmtMore && list.length) {                 // 滚动到底自动加载下一页
+      const sc = $('cmtScroll');
+      sc.onscroll = () => {
+        if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 40) {
+          sc.onscroll = null; cmtPage++; loadComments();
+        }
+      };
+    }
+  } catch (e) {
+    $('cmtList').innerHTML = '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">评论请求失败</div>';
+  } finally { cmtLoading = false; }
 }
 
 /* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============
