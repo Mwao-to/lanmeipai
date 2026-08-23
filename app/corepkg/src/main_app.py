@@ -2643,11 +2643,11 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .eq-row:active { transform:scale(.98); background:rgba(194,12,12,.08); }
   .eq-row.on { background:rgba(194,12,12,.08); border-color:rgba(236,65,65,.35); }
   .eq-name {                               /* 字号全预设统一(10.5px基础上再放大0.5倍) */
-    font-family:var(--mono); font-size:15.5px; color:var(--text-bright);
+    font-family:var(--mono); font-size:7.75px; color:var(--text-bright);   /* 15.5px统一缩小0.5倍 */
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
-  .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:15.5px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
+  .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:7.75px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
   .eq-row.on .eq-mark { color:var(--accent-hover); }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
@@ -4343,7 +4343,7 @@ async function applyEq(name) {
     eqActiveName = name;
     localStorage.setItem('eqPreset', name);
     if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));
-    renderEqList(); closeEqModal();
+    renderEqList();
     toast('已应用EQ：' + imp.display, 'success');
     return;
   }
@@ -4360,7 +4360,7 @@ async function applyEq(name) {
   localStorage.setItem('eqPreset', name);
   if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));   // 同步持久化到私有目录eqw.json
   renderEqList();
-  closeEqModal();                          // 选中即生效,自动收起弹窗无需手动关闭
+  renderEqList();                          // 选中后弹窗保持打开,便于连续试听切换(v3.58)
   toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
 }
 let EQ_ORDER = [];
