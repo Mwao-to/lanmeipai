@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 45
-        versionName '3.32'   // 紧急修复:v3.31误将plId注入make_song签名致搜索/热门/歌单全挂(plId移回JS state)
+        versionCode 46
+        versionName '3.33'   // 弹窗遮罩inset兼容修复(旧WebView穿透)+封面恢复210px+热门标题〄+评论钮固定最右
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

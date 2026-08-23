@@ -2502,6 +2502,14 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   .panel-title::after { content:""; flex:1; height:1px; background:var(--border); min-width:6px; }
   .calib { margin-left:auto; display:inline-flex; align-items:center; gap:4px; flex-shrink:0; }
+  #cmtToggle {
+    margin-left:auto; flex-shrink:0;                 /* 固定在标题栏最右 */
+    font-family:var(--mono); font-size:8px; color:var(--muted);
+    background:var(--glass-thin); border:1px solid var(--glass-border);
+    border-radius:8px; padding:2px 8px; cursor:pointer;
+  }
+  @media (hover:hover) { #cmtToggle:hover { color:var(--accent-hover); border-color:rgba(236,65,65,.6); } }
+  #cmtToggle:active { transform:scale(.85); }
   .calib button {
     width:17px; height:17px; border-radius:5px; border:1px solid var(--glass-border);
     background:rgba(255,255,255,.05); color:var(--muted); cursor:pointer;
@@ -2734,7 +2742,8 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     object-fit:contain;
   }
   .modal-mask {
-    position:fixed; inset:0; z-index:1000; display:none;
+    position:fixed; top:0; left:0; right:0; bottom:0;   /* 不用 inset 简写:旧WebView不识别致遮罩塌缩穿透 */
+    z-index:1000; display:none;
     align-items:center; justify-content:center;
     background:rgba(0,0,0,.6);
   }
@@ -2753,8 +2762,8 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   /* ═══ 下载弹窗·封面预览:与下载按钮同宽(210px),1:1 正方形,整体圆角 ═══ */
   .dl-coverbox {
-    width:105px; height:105px;             /* 缩小一半 */
-    margin-bottom:10px; border-radius:10px; overflow:hidden;
+    width:210px; height:210px;             /* 恢复原尺寸 */
+    margin-bottom:12px; border-radius:14px; overflow:hidden;
     background:var(--bg-panel); border:1px solid var(--glass-border);
     box-shadow:0 4px 16px rgba(0,0,0,.35), var(--hi-top);
     flex-shrink:0;
@@ -2897,7 +2906,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   </div>
 
   <div class="hot">
-    <div class="hot-title">🔥 网易云热门歌曲</div>
+    <div class="hot-title">〄 网易云热门歌曲</div>
     <div class="hot-list" id="hotList"><span class="loading">加载中</span></div>
   </div>
 
@@ -2913,7 +2922,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
       </div>
     </div>
     <div class="col">
-      <h3 class="panel-title">列表 PLAYLIST <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button><button id="cmtToggle" type="button" title="当前歌曲评论">@</button><button id="srcToggle" type="button" title="切换 歌单/单曲 数据" style="display:none">♫</button></span></h3>
+      <h3 class="panel-title">列表 PLAYLIST <span class="calib"><button id="mqToggle" type="button" title="搜索结果跑马灯 开/关">⇄</button><button id="srcToggle" type="button" title="切换 歌单/单曲 数据" style="display:none">♫</button></span><button id="cmtToggle" type="button" title="当前歌曲评论">评论</button></h3>
       <div class="panel" id="resultPanel">
         <div class="empty" id="resultEmpty">ᕙ(  •̀ ᗜ •́  )ᕗ</div>
         <div id="resultBody"></div>
