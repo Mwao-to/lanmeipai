@@ -278,21 +278,23 @@
   }
   @media (hover:hover) { .dl-tag:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
 
-  /* ═══ C键·EQ弹窗(复用modal结构;竖向预设列表+8柱dB迷你图) ═══ */
-  .eq-list {
-    margin-top:12px; max-height:52vh; overflow-y:auto; overscroll-behavior:contain;
+  /* ═══ C键·EQ弹窗(复用modal结构;预设列表1.5倍放大,无滚动条整体适配弹窗内) ═══ */
+  .eqbox { width:min(340px, 92vw); }                       /* EQ弹窗稍宽,容纳放大后的预设布局 */
+  .eq-list {                                               /* 去掉纵横滚动条:zoom整体放大,行距压缩保证13套全部容纳 */
+    margin-top:10px; zoom:1.5; max-width:100%;
     border-top:1px solid var(--glass-border);
   }
   .eq-row {
-    display:flex; align-items:center; gap:10px;
-    padding:9px 6px; border-bottom:1px solid rgba(255,255,255,.05);
+    display:flex; align-items:center; gap:8px;
+    padding:4px 6px; border-bottom:1px solid rgba(255,255,255,.05);
     cursor:pointer; user-select:none;
   }
+  @media (max-height:640px) { .eq-list { zoom:1.2; } }     /* 矮屏保底仍不超出弹窗 */
   .eq-row:active { background:rgba(255,255,255,.06); }
   .eq-name { flex:0 0 64px; font-size:11px; color:var(--text); font-family:var(--mono); }
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
   .eq-bars {
-    flex:1; height:20px; display:flex; align-items:flex-end;
+    flex:1; height:16px; display:flex; align-items:flex-end;
     justify-content:flex-end; gap:2px;
   }
   .eq-bars i { width:5px; background:rgba(255,255,255,.18); border-radius:1px; }
@@ -619,7 +621,7 @@
   <div class="quick-bar" id="quickBar">
     <button type="button" data-fn="A">登录</button>
     <button type="button" data-fn="B">歌单</button>
-    <button type="button" data-fn="C">C</button>
+    <button type="button" data-fn="C">EQ</button>
     <button type="button" data-fn="D">D</button>
     <button type="button" data-fn="E">E</button>
   </div>
@@ -657,7 +659,7 @@
 </div>
 
 <div class="modal-mask" id="eqModal">
-  <div class="modal-box">
+  <div class="modal-box eqbox">
     <button class="modal-x" onclick="closeEqModal()" title="关闭">○</button>
     <div class="modal-title"><span>音效 EQ <em style="font-style:normal;font-size:9px;color:#77777f">100~10KHz · ±8dB</em></span></div>
     <div class="eq-list" id="eqList"></div>
