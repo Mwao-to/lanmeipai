@@ -371,9 +371,9 @@ public class MainActivity extends Activity {
                 java.io.FileWriter w = new java.io.FileWriter(f);
                 w.write(json == null ? "" : json);
                 w.close();
-                Dbg.w(this, "[eq] eqw.json 已保存: " + json);
+                Dbg.w(MainActivity.this, "[eq] eqw.json 已保存: " + json);
             } catch (Throwable t) {
-                Dbg.w(this, "‼️ [eq] eqw.json 写入失败", t);
+                Dbg.w(MainActivity.this, "‼️ [eq] eqw.json 写入失败", t);
             }
         }
 
@@ -390,7 +390,7 @@ public class MainActivity extends Activity {
                 r.close();
                 return sb.toString();
             } catch (Throwable t) {
-                Dbg.w(this, "‼️ [eq] eqw.json 读取失败", t);
+                Dbg.w(MainActivity.this, "‼️ [eq] eqw.json 读取失败", t);
                 return "";
             }
         }
