@@ -576,7 +576,6 @@ class MusicSource(ABC):
 def make_song(
     source,
     songmid,
-  plId: '',          # 歌单分段模式:非空时 loadMore/maybePrefetch/autoFill 走歌单续页通道
     name,
     singer,
     img = '',
@@ -3042,6 +3041,7 @@ const state = {
   page: 1,
   allPage: 0,
   total: 0,
+  plId: '',          // 歌单分段模式:非空时 loadMore/maybePrefetch/autoFill 走歌单续页通道(v3.31误入make_song签名,此处补正主)
   song: null,        // 当前播放歌曲
   songIndex: -1,
   lyricIdx: -1,      // 当前高亮歌词行(只影响歌词面板)
