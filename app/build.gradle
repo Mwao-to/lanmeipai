@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 50
-        versionName '3.37'   // 播放器进度条改隐藏式抽屉:点播放器空白处向上弹出/再点收起(同配色融合不占空间),支持拖拽跟手调进度
+        versionCode 51
+        versionName '3.38'   // 进度条内置播放器内部上方(点空白处显示/隐藏,不再弹出);修复拖拽不跟手:拖动中禁用width过渡+currentTime 150ms节流提交+屏蔽timeupdate回拽
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
