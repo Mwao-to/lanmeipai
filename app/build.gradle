@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 66
-        versionName '3.53'   // 修复EQ列表塌缩窄列:父容器.modal-box为居中flex致子元素收缩到内容宽,eq-list加align-self:stretch+负边距强制撑满弹窗340px;字号回调至歌单条目同款10.5px
+        versionCode 67
+        versionName '3.54'   // EQ弹窗:标题改「音效 · EQ (内置)」;点选预设即生效并自动收起弹窗(免手动关闭);预设字体统一在10.5px基础上放大0.5倍至15.5px
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

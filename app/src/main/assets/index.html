@@ -297,12 +297,12 @@
   .eq-row:last-child { margin-bottom:0; }
   .eq-row:active { transform:scale(.98); background:rgba(194,12,12,.08); }
   .eq-row.on { background:rgba(194,12,12,.08); border-color:rgba(236,65,65,.35); }
-  .eq-name {                               /* 字号与歌单条目名称(pl-name)同款统一 */
-    font-family:var(--mono); font-size:10.5px; color:var(--text-bright);
+  .eq-name {                               /* 字号全预设统一(10.5px基础上再放大0.5倍) */
+    font-family:var(--mono); font-size:15.5px; color:var(--text-bright);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
-  .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:10.5px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
+  .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:15.5px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
   .eq-row.on .eq-mark { color:var(--accent-hover); }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
@@ -666,7 +666,7 @@
 <div class="modal-mask" id="eqModal">
   <div class="modal-box eqbox">
     <button class="modal-x" onclick="closeEqModal()" title="关闭">○</button>
-    <div class="modal-title">音效 EQ</div>
+    <div class="modal-title">音效 · EQ (内置)</div>
     <div class="eq-list" id="eqList"></div>
   </div>
 </div>
@@ -1951,6 +1951,7 @@ async function applyEq(name) {
   localStorage.setItem('eqPreset', name);
   if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));   // 同步持久化到私有目录eqw.json
   renderEqList();
+  closeEqModal();                          // 选中即生效,自动收起弹窗无需手动关闭
   toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
 }
 function renderEqList() {
