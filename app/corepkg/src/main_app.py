@@ -4087,32 +4087,28 @@ $('audio').addEventListener('play', () => $('btnPlay').innerHTML = ICON_PAUSE);
 $('audio').addEventListener('pause', () => $('btnPlay').innerHTML = ICON_PLAY);
 $('btnPlay').innerHTML = ICON_PLAY;
 
-/* ---- 分享:拼接文案后传给输入法(绝不改动搜索框内容)。文案:我在听网易云的歌曲：歌名 - 歌手 官方链接。
-        常规方法:向当前已聚焦的可编辑元素光标处插入(如同键入,搜索框除外);
-        兜底方法:Android 层写入剪贴板并弹键盘 —— 输入法键盘上方会出现这条剪贴板建议,点一下即可任意上屏 ---- */
+/* ---- 分享:拼接文案后静默复制(绝不改动搜索框/不弹键盘/不抢焦点),用户自行粘贴发送。
+        文案:我在听网易云的歌曲：歌名 - 歌手 官方链接。
+        常规方法:navigator.clipboard(JS标准剪贴板API);
+        兜底方法:Android imeCommit 桥写系统剪贴板 —— 即输入法的剪贴板,可从键盘上方建议选取 ---- */
 function shareSong() {
   if (!state.song || !state.song.songmid) { toast('还没有播放中的歌曲', 'warn'); return; }
   const msg = '我在听网易云的歌曲：' + state.song.name + ' - ' + state.song.singer +
               ' https://music.163.com/song?id=' + state.song.songmid;
-  let done = false;
-  const el = document.activeElement;
-  const editable = el && el !== $('kw') && !el.readOnly &&
-    ((el.tagName === 'INPUT' && ['text','search','url','tel','password'].includes(el.type)) ||
-     el.tagName === 'TEXTAREA' || el.isContentEditable);
-  if (editable) {                                            // ═══ 常规方法:光标处插入(如同键入) ═══
-    try {
-      const lenBefore = el.value !== undefined ? el.value.length : -1;
-      done = document.execCommand('insertText', false, msg);
-      if (done && el.value !== undefined && el.value.length === lenBefore) done = false;   // 部分WebView静默无效→走兑底
-    } catch (e) { done = false; }
-  }
-  if (done) { toast('已在输入框光标处插入', 'success'); return; }
-  if (window.AndroidBridge && AndroidBridge.imeCommit) {     // ═══ 兑底方法:Android 写入输入法 ═══
-    AndroidBridge.imeCommit(msg);
-  } else {
-    toast('分享失败', 'error');
-  }
+  const okMsg = () => toast('复制歌曲分享链接成功', 'success');
+  const fallback = () => {                     // ═══ 兜底方法:Android 写系统剪贴板(无键盘无焦点) ═══
+    if (window.AndroidBridge && AndroidBridge.imeCommit) { AndroidBridge.imeCommit(msg); okMsg(); }
+    else toast('复制失败', 'error');
+  };
+  try {                                        // ═══ 常规方法:JS 标准剪贴板API ═══
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(msg).then(okMsg, fallback);
+      return;
+    }
+  } catch (e) { }
+  fallback();
 }
+
 
 /* ============ 下载(弹窗选择 歌曲/歌词) ============ */
 const safeName = n => (n || '未知').replace(/[\\/:*?"<>|]/g, '_').trim();

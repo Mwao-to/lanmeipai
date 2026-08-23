@@ -342,8 +342,8 @@ public class MainActivity extends Activity {
             saveTextToDownloads(filename, content);
         }
 
-        /** 分享兑底:把文本递给系统输入法 —— 写入剪贴板(主流中文输入法键盘上方会显示
-         *  这条剪贴板建议,点一下即可上屏到任何输入框),并尝试弹出键盘让建议立即可见。 */
+        /** 分享兑底:把文本写入系统剪贴板(即交给输入法的剪贴板,主流中文输入法可从
+         *  键盘上方建议选取)。不弹键盘、不抢焦点,由用户自行粘贴发送。 */
         @JavascriptInterface
         public void imeCommit(final String text) {
             runOnUiThread(() -> {
@@ -355,17 +355,12 @@ public class MainActivity extends Activity {
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("wy-share", text));
                         ok = true;
                     }
-                    try {   // 弹出键盘,输入法的剪贴板建议条随即呈现刚写入的内容
-                        android.view.inputmethod.InputMethodManager imm =
-                            (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                        if (imm != null && web != null) { web.requestFocus(); imm.showSoftInput(web, 0); }
-                    } catch (Throwable ignore) { }
                 } catch (Throwable t) {
                     Dbg.w(MainActivity.this, "‼️ [ime] imeCommit 失败", t);
                 }
-                Dbg.w(MainActivity.this, "[ime] 兑底传递完成 clipboard=" + ok
+                Dbg.w(MainActivity.this, "[ime] 静默复制完成 clipboard=" + ok
                     + " len=" + (text == null ? 0 : text.length()));
-                toast(MainActivity.this, ok ? "已传给输入法：点击键盘上方剪贴板建议即可上屏" : "分享失败");
+                toast(MainActivity.this, ok ? "复制歌曲分享链接成功" : "复制失败");
             });
         }
     }
