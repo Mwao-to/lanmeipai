@@ -2565,7 +2565,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
 
   /* ============ 底部播放器(液体玻璃主卡:渐变深色+顶部高光+品牌色投影) ============ */
-  .player { position:fixed; left:0; right:0; bottom:0; z-index:100; display:flex; justify-content:center; padding:0 14px 14px; pointer-events:none; }
+  .player { position:fixed; left:0; right:0; bottom:0; z-index:100; display:flex; flex-direction:column; align-items:center; padding:0 14px 14px; pointer-events:none; }
   .player-card {
     pointer-events:auto; width:100%; max-width:680px;
     background:linear-gradient(165deg, rgba(46,46,52,.6), rgba(24,24,28,.68));
@@ -2596,7 +2596,23 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     border:1px solid rgba(255,214,10,.35); border-radius:4px; padding:0 5px;
     font-family:var(--mono); flex-shrink:0;
   }
-  .p-progress { display:flex; align-items:center; gap:8px; flex-shrink:0; width:42%; min-width:120px; cursor:pointer; padding:6px 0; }
+  /* ---- 隐藏式进度条抽屉:默认隐藏不占空间,点播放器空白处向上弹出(同播放器配色融合为一体) ---- */
+  .seek-pop {
+    pointer-events:auto; width:100%; max-width:680px;
+    background:linear-gradient(165deg, rgba(46,46,52,.6), rgba(24,24,28,.68));
+    border:1px solid rgba(255,255,255,.11);
+    border-radius:var(--r-xl) var(--r-xl) 14px 14px;
+    padding:9px 14px; margin-bottom:-1px;                 /* 底边压住播放器卡上缘 → 无缝一体 */
+    display:flex; align-items:center; gap:10px;
+    box-shadow:0 -12px 36px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.13);
+    opacity:0; transform:translateY(18px); visibility:hidden; pointer-events:none;
+    transition:transform .3s var(--spring), opacity .2s ease, visibility 0s linear .32s;
+  }
+  .seek-pop.open {
+    opacity:1; transform:translateY(0); visibility:visible; pointer-events:auto;
+    transition:transform .34s var(--spring), opacity .16s ease;
+  }
+  .seek-pop .p-bar { cursor:pointer; touch-action:none; }
   .p-bar { flex:1; height:5px; background:rgba(255,255,255,.09); border-radius:3px; overflow:visible; box-shadow:inset 0 1px 2px rgba(0,0,0,.5); }
   .p-fill { height:100%; width:0%; background:var(--grad-brand); border-radius:3px; transition:width .2s linear; position:relative; }
   .p-fill::after {
@@ -2605,7 +2621,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     border:2px solid var(--accent-hover); box-shadow:0 0 8px rgba(236,65,65,.55);
     transition:transform var(--t-press) var(--spring);
   }
-  .p-progress:active .p-fill::after { transform:scale(1.5); }   /* 拖动时滑块弹性放大 */
+  .seek-pop .p-bar:active .p-fill::after { transform:scale(1.5); }   /* 拖动时滑块弹性放大 */
   .p-time { font-family:var(--mono); font-size:10.5px; color:var(--muted); white-space:nowrap; }
 
   /* ============ 下载标签 + 弹窗 ============ */
@@ -2889,7 +2905,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     .song .idx, .song .name, .song .singer { font-size:11.5px; }
   }
   @media (max-width:600px) {
-    .p-progress { width:34%; min-width:88px; }
+    .seek-pop { padding:8px 12px; }
     .player-card { padding:9px 12px; gap:9px; border-radius:20px; }
     .play-btn { width:38px; height:38px; }
   }
@@ -2946,15 +2962,16 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 </div>
 
 <div class="player">
-  <div class="player-card">
+  <div class="seek-pop" id="seekPop">
+    <span class="p-time" id="nowTime">00:00</span>
+    <div class="p-bar" id="seekBar"><div class="p-fill" id="progFill"></div></div>
+    <span class="p-time" id="durTime">00:00</span>
+  </div>
+  <div class="player-card" onclick="toggleSeek(event)">
     <button class="play-btn" id="btnPlay" onclick="togglePlay()" title="播放/暂停"></button>
     <div class="p-info">
       <div class="p-name" id="nowName"><div class="p-track">未播放</div></div>
       <div class="p-artist" id="nowArtist"><div class="p-track"></div></div>
-    </div>
-    <div class="p-progress" id="progWrap" onclick="seek(event)">
-      <div class="p-bar"><div class="p-fill" id="progFill"></div></div>
-      <span class="p-time" id="nowTime">00:00 / 00:00</span>
     </div>
     <button class="dl-tag" id="mvTag" style="display:none" onclick="openMvModal()" title="播放/下载 MV">MV</button>
     <button class="dl-tag" onclick="openDlModal()" title="下载歌曲/歌词">下载</button>
@@ -4032,17 +4049,42 @@ function togglePlay() {
   if (a.paused) a.play().catch(() => toast('无法播放', 'error'));
   else a.pause();
 }
-function seek(e) {
-  const wrap = $('progWrap'), rect = wrap.getBoundingClientRect();
-  const a = $('audio');
+/* ---- 点播放器空白处:弹出/收起隐藏式进度条(播放/下载等按钮点击不触发) ---- */
+function toggleSeek(e) {
+  if (e.target.closest('button')) return;
+  $('seekPop').classList.toggle('open');
+}
+/* ---- 进度条拖拽:pointerdown 即定位,setPointerCapture 使拖出条外仍跟手 ---- */
+function seekTo(clientX) {
+  const a = $('audio'), rect = $('seekBar').getBoundingClientRect();
   if (a.duration && rect.width > 0) {
-    a.currentTime = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width)) * a.duration;
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    a.currentTime = pct * a.duration;
+    $('progFill').style.width = (pct * 100) + '%';   // 拖动中即时反馈
   }
 }
+(function () {
+  const bar = $('seekBar');
+  bar.addEventListener('pointerdown', e => {
+    if (!$('audio').duration) return;
+    bar.setPointerCapture(e.pointerId);
+    seekTo(e.clientX);
+    const mv = ev => seekTo(ev.clientX);
+    const up = () => {
+      bar.removeEventListener('pointermove', mv);
+      bar.removeEventListener('pointerup', up);
+      bar.removeEventListener('pointercancel', up);
+    };
+    bar.addEventListener('pointermove', mv);
+    bar.addEventListener('pointerup', up);
+    bar.addEventListener('pointercancel', up);
+  });
+})();
 function updateProg() {
   const a = $('audio'), dur = a.duration || 0, cur = a.currentTime || 0;
   $('progFill').style.width = dur ? (cur / dur * 100) + '%' : '0%';
-  $('nowTime').textContent = `${fmtTime(cur)} / ${fmtTime(dur)}`;
+  $('nowTime').textContent = fmtTime(cur);
+  $('durTime').textContent = fmtTime(dur);
 }
 $('audio').addEventListener('timeupdate', updateProg);
 $('audio').addEventListener('loadedmetadata', updateProg);
