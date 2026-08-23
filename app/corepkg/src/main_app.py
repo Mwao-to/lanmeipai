@@ -2133,6 +2133,19 @@ def api_urn_add():
     ok = _urn_save(lst)
     return jsonify({'code': 200, 'data': {'saved': ok, 'list': lst}})
 
+@app.get('/api/urn_clear')
+def api_urn_clear():
+    """清空全部搜索历史:删除 urn.json 文件本身。"""
+    _ensure_init()
+    f = _urn_file()
+    ok = True
+    if f and os.path.exists(f):
+        try:
+            os.remove(f)
+        except Exception:
+            ok = False
+    return jsonify({'code': 200, 'data': {'removed': ok}})
+
 @app.post('/api/cookie')
 def api_set_cookie():
     """设置网易云 Cookie(如 MUSIC_U=xxx),可选"""
@@ -2560,7 +2573,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
    * 内部 5 键等权 1:1,透明药丸+红字(与播放器下载标签同配色) */
   .quick-bar {
     display:flex; gap:8px; align-items:center;
-    width:100%; max-width:680px; margin:10px auto 0;   /* 长度与播放器一致 */
+    width:100%; max-width:680px; margin-top:10px; margin-left:auto; margin-right:auto;   /* 上距主列表10px */
     padding:8px; box-sizing:border-box;
     background:linear-gradient(165deg, rgba(46,46,52,.6), rgba(24,24,28,.68));
     border:1px solid rgba(255,255,255,.11); border-radius:var(--r-xl);
@@ -2568,7 +2581,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   .quick-bar button {
     flex:1 1 0; min-width:0;                 /* 五键权重 1:1,等宽等大 */
-    padding:8px 0; font-family:var(--mono); font-size:16px;   /* 药丸整体放大一倍 */
+    padding:4px 0; font-family:var(--mono); font-size:11px;    /* 药丸缩小一半;字号与热门歌曲标签一致 */
     color:var(--accent-hover); background:rgba(255,255,255,.05);
     border:1px solid var(--glass-border); border-radius:99px;
     text-align:center; cursor:pointer; user-select:none; touch-action:manipulation;
@@ -2647,6 +2660,15 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;
   }
   .pl-sub { font-family:var(--mono); font-size:8.5px; color:var(--muted); margin-top:2px; display:block; }
+  /* 历史区头部:左标题+右清空钮(比历史标签小一号) */
+  .urn-head { display:flex; align-items:center; justify-content:space-between; width:100%; margin-bottom:4px; }
+  .urn-clear {
+    padding:2px 7px; border-radius:99px; border:none; cursor:pointer;
+    background:rgba(236,65,65,.12); color:var(--accent-hover);
+    font-family:var(--mono); font-size:8px;
+    transition:transform var(--t-press) var(--spring);
+  }
+  .urn-clear:active { transform:scale(.9); }
   .dl-tag:active { transform:scale(.9); }
   #mvModal .modal-box { width:min(340px, 88vw); }
   .modal-box video {
@@ -2690,7 +2712,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   @keyframes popIn { from { opacity:0; transform:scale(.92) translateY(8px); } to { opacity:1; transform:none; } }
   .modal-x {
-    position:absolute; top:8px; right:10px; background:none; border:none;
+    position:absolute; top:calc(8px + .3em); right:10px; background:none; border:none;   /* 整体下移0.3em */
     color:var(--muted); font-size:17px; line-height:1; cursor:pointer; padding:2px 4px;
     transition:transform var(--t-press) var(--spring), color .15s ease;
   }
@@ -2900,7 +2922,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
              placeholder="扫码后自动填入；也可手动粘贴 Cookie(MUSIC_U=…)">
       <div class="cookie-actions">
         <button class="modal-btn secondary" onclick="clearCookieInput()">清空输入框</button>
-        <button class="modal-btn" onclick="saveCookieInput()">保存兑底</button>
+        <button class="modal-btn" onclick="saveCookieInput()">保存</button>
       </div>
     </div>
   </div>
@@ -3241,10 +3263,20 @@ async function refreshUrnHistory() {
     const r = await api('/api/urn_get');
     const hs = r.code === 200 && r.data ? r.data : [];
     $('userChips').innerHTML = hs.length
-      ? '<span class="pl-sub" style="margin-bottom:4px">// 搜索历史(最多8条)</span>' +
+      ? '<div class="urn-head"><span class="pl-sub" style="margin:0">// 搜索历史(最多8条)</span>' +
+        '<button class="urn-clear" onclick="clearUrnHistory()">清空记录</button></div>' +
         hs.map(h => `<span class="user-chip" data-nick="${esc(h.nick)}" onclick="histSearch(this.dataset.nick)">${esc(h.nick)}</span>`).join('')
       : '';
   } catch (e) { /* 静默 */ }
+}
+async function clearUrnHistory() {
+  try {
+    const r = await api('/api/urn_clear');
+    if (r.code === 200) {
+      $('userChips').innerHTML = '';
+      toast('已清空全部搜索记录', 'success', 1800);
+    } else toast('清空失败:' + (r.message || ''), 'error');
+  } catch (e) { toast('清空失败', 'error'); }
 }
 function histSearch(nick) {
   $('userKw').value = nick;

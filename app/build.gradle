@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 41
-        versionName '3.28'   // B键重构:同名用户列表选择+urn.json历史8条FIFO+去回填+文案调整
+        versionCode 42
+        versionName '3.29'   // 保存钮改「保存」+弹窗关闭钮下移0.3em+历史区加清空记录(删urn.json)+五键药丸缩小一半/字号对齐热门标题
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
