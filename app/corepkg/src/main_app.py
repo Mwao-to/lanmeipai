@@ -576,6 +576,7 @@ class MusicSource(ABC):
 def make_song(
     source,
     songmid,
+  plId: '',          # 歌单分段模式:非空时 loadMore/maybePrefetch/autoFill 走歌单续页通道
     name,
     singer,
     img = '',
@@ -1187,12 +1188,18 @@ class WYSource(MusicSource):
                     'info': {'name': playlist.get('name', ''), 'play_count': format_play_count(playlist.get('playCount'))}}
         # 拉取歌曲详情
         ids = [str(t['id']) for t in track_ids]
-        song_list = self._get_song_details(ids)
+        if limit:
+            # 分页切片:trackIds 官方一次全返,此处只拉当前页详情——万首歌单也能首屏秒开
+            start = max(page - 1, 0) * limit
+            ids_page = ids[start:start + limit]
+        else:
+            ids_page = ids
+        song_list = self._get_song_details(ids_page)
         return {
             'list': song_list,
             'page': page,
             'limit': limit,
-            'total': len(song_list),
+            'total': len(track_ids),
             'source': self.id,
             'info': {
                 'name': playlist.get('name', ''),
@@ -1996,23 +2003,23 @@ def api_hot():
 
 @app.get('/api/songlist')
 def api_songlist():
-    """按歌单 id 取歌曲列表,方便播放收藏歌单 / 热门歌单"""
+    """按歌单 id 取歌曲列表(分页):page/limit 切片,配合主列表预加载策略逐段续载"""
     list_id = (request.args.get('id') or '').strip()
     if not list_id:
         return jsonify({'code': 400, 'message': '缺少 id 参数'})
     limit_arg = request.args.get('limit')
     try:
-        limit = min(max(int(limit_arg), 1), 500) if limit_arg else None
+        limit = min(max(int(limit_arg), 1), 200) if limit_arg else None
     except ValueError:
         limit = None
     try:
-        res = wy.songlist_detail(list_id, 1, limit)
+        page = max(int(request.args.get('page', 1) or 1), 1)
+    except ValueError:
+        page = 1
+    try:
+        res = wy.songlist_detail(list_id, page, limit)
     except Exception as e:
         return jsonify({'code': 500, 'message': str(e)})
-    if limit:
-        # 榜单接口会返回全部 trackIds,这里截取前 limit 首
-        res['list'] = (res.get('list') or [])[:limit]
-        res['total'] = len(res['list'])
     _cache_songs(res['list'])
     return jsonify({'code': 200, 'data': res})
 
@@ -2747,8 +2754,8 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   /* ═══ 下载弹窗·封面预览:与下载按钮同宽(210px),1:1 正方形,整体圆角 ═══ */
   .dl-coverbox {
-    width:210px; height:210px;             /* 长度=下载按钮宽度,高度=长度 */
-    margin-bottom:12px; border-radius:14px; overflow:hidden;
+    width:105px; height:105px;             /* 缩小一半 */
+    margin-bottom:10px; border-radius:10px; overflow:hidden;
     background:var(--bg-panel); border:1px solid var(--glass-border);
     box-shadow:0 4px 16px rgba(0,0,0,.35), var(--hi-top);
     flex-shrink:0;
@@ -3428,16 +3435,21 @@ function openUserPlaylist(btn) {
 }
 
 /* ═══ @键·当前歌曲评论区(官方接口→弹窗竖排) ═══ */
-let cmtPage = 1, cmtLoading = false, cmtMore = true;
+let cmtPage = 1, cmtLoading = false, cmtMore = true, cmtSeq = 0;
 function openCmtModal() {
   if (!state.song) { toast('还没有播放中的歌曲', 'warn'); return; }
+  cmtSeq++;                                    // 作废上一首歌的在途请求与滚动监听
+  cmtPage = 1; cmtMore = true; cmtLoading = false;
   $('cmtModal').classList.add('show');
-  cmtPage = 1; cmtMore = true;
   $('cmtTotal').textContent = '';
   $('cmtList').innerHTML = '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">评论加载中…</div>';
   loadComments();
 }
-function closeCmtModal() { $('cmtModal').classList.remove('show'); }
+function closeCmtModal() {
+  cmtSeq++;                                    // 关弹窗即在途响应作废
+  $('cmtScroll').onscroll = null;
+  $('cmtModal').classList.remove('show');
+}
 $('cmtModal').addEventListener('click', e => { if (e.target.id === 'cmtModal') closeCmtModal(); });
 $('cmtToggle').addEventListener('click', openCmtModal);
 function fmtCmtTime(ms) {
@@ -3447,6 +3459,7 @@ function fmtCmtTime(ms) {
 }
 async function loadComments() {
   if (cmtLoading || !cmtMore) return;
+  const mySeq = cmtSeq;                        // 记领本会话令牌,过期响应整包丢弃
   const sid = state.song ? (state.song.songmid || (state.song.meta || {}).songId) : '';
   if (!sid) {
     $('cmtList').innerHTML = '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">当前歌曲缺少 id</div>';
@@ -3455,6 +3468,7 @@ async function loadComments() {
   cmtLoading = true;
   try {
     const r = await api(`/api/comments?songmid=${encodeURIComponent(sid)}&page=${cmtPage}`);
+    if (mySeq !== cmtSeq) return;              // 已换歌/已关窗:旧数据不再渲染
     if (r.code !== 200) {
       $('cmtList').innerHTML = `<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">${esc(r.message || '加载失败')}</div>`;
       return;
@@ -3475,17 +3489,27 @@ async function loadComments() {
       $('cmtList').innerHTML = html || '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">暂无评论</div>';
     else
       $('cmtList').insertAdjacentHTML('beforeend', html);
-    if (cmtMore && list.length) {                 // 滚动到底自动加载下一页
+    if (cmtMore && list.length) {              // 预加载链:未撑满容器自动续页,撑满后挂滚动监听到底再续
       const sc = $('cmtScroll');
       sc.onscroll = () => {
+        if (mySeq !== cmtSeq) { sc.onscroll = null; return; }
         if (sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 40) {
           sc.onscroll = null; cmtPage++; loadComments();
         }
       };
+      requestAnimationFrame(() => {            // 内容不足一屏:直接预取下一页,不留空白
+        if (mySeq !== cmtSeq) return;
+        if (sc.scrollHeight <= sc.clientHeight + 40 && cmtMore && !cmtLoading) {
+          sc.onscroll = null; cmtPage++; loadComments();
+        }
+      });
     }
   } catch (e) {
-    $('cmtList').innerHTML = '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">评论请求失败</div>';
-  } finally { cmtLoading = false; }
+    if (mySeq === cmtSeq)
+      $('cmtList').innerHTML = '<div style="text-align:center;padding:20px;color:#777;font-family:var(--mono);font-size:10px">评论请求失败</div>';
+  } finally {
+    if (mySeq === cmtSeq) cmtLoading = false;   // 过期会话不动新会话的锁
+  }
 }
 
 /* ============ 启动引导:界面先行渲染,首个接口异常时自动重试 + toast 提示 ============
@@ -3584,7 +3608,8 @@ let loadingMore = false;
 let lastAppendCount = 1;   // 上次预取新增行数(为 0 时停止链式预取,防死循环)
 let searchSeq = 0;         // 搜索代数令牌:每次新搜索+1,旧搜索/旧预取的过期响应一律丢弃
 async function loadMore() {
-  if (loadingMore || !state.kw) return;
+  if (loadingMore) return;
+  if (!state.kw && !state.plId) return;                       // 关键词或歌单分段二选一
   if (state.allPage && state.page >= state.allPage) return;   // 已到最后一页
   loadingMore = true;
   const seq = searchSeq;     // 记领当前搜索代数,返回后核对(防新旧搜索串页)
@@ -3596,12 +3621,16 @@ async function loadMore() {
   }
   tip.textContent = '加载中';
   try {
-    const r = await api(`/api/search?keyword=${encodeURIComponent(state.kw)}&page=${state.page + 1}&limit=${PAGE_SIZE}`);
+    const r = await (state.plId
+      ? api(`/api/songlist?id=${encodeURIComponent(state.plId)}&page=${state.page + 1}&limit=${PAGE_SIZE}`)
+      : api(`/api/search?keyword=${encodeURIComponent(state.kw)}&page=${state.page + 1}&limit=${PAGE_SIZE}`));
     if (seq !== searchSeq) { tip.remove(); return; }   // 新搜索已开始:旧关键词数据整包丢弃
     if (r.code !== 200) { tip.remove(); return; }
     state.page += 1;
     state.total = r.data.total || state.total;
-    state.allPage = r.data.allPage || state.allPage;
+    state.allPage = state.plId
+      ? Math.max(1, Math.ceil(state.total / PAGE_SIZE))     // 歌单模式:按总数折算页数
+      : (r.data.allPage || state.allPage);
     const exist = new Set(state.list.map(s => s.songmid));
     const fresh = (r.data.list || []).filter(s => s.songmid && !exist.has(s.songmid));   // 跨页去重
     state.list = state.list.concat(fresh);
@@ -3626,7 +3655,7 @@ async function autoFill(minCount) {
   const el = $('resultPanel');
   const seq = searchSeq;     // 新搜索开始后立即终止旧填充循环
   let guard = 0;
-  while (guard++ < 12 && seq === searchSeq && !loadingMore && state.kw
+  while (guard++ < 12 && seq === searchSeq && !loadingMore && (state.kw || state.plId)
          && !(state.allPage && state.page >= state.allPage)) {
     const needMore = el.scrollHeight <= el.clientHeight + 40        // 未撑满,无滚动条
                   || (minCount && state.list.length < minCount);    // 未达 PC 预载目标
@@ -3658,11 +3687,13 @@ function parseMusicLink(kw) {
 async function loadPlaylist(pid, fromUrl, seq) {
   $('resultEmpty').style.display = 'none';
   $('resultBody').innerHTML = '<div class="loading">歌单加载中</div>';
-  state.kw = '';   // 一次性载入:清空关键词即可禁用下滑分页/自动补齐(loadMore/autoFill 均有 !state.kw 保护)
+  state.kw = ''; state.plId = pid;   // 歌单分段模式:首页20首,下滑/预取走 loadMore 的 plId 通道续载
+  state.page = 1; state.allPage = 0;
   try {
-    const r = await api(`/api/songlist?id=${encodeURIComponent(pid)}&limit=500`);
+    const r = await api(`/api/songlist?id=${encodeURIComponent(pid)}&page=1&limit=${PAGE_SIZE}`);
     if (seq !== searchSeq) return null;
     if (r.code !== 200 || !(r.data && r.data.list && r.data.list.length)) {
+      state.plId = '';
       if (!fromUrl) { await runSearch(pid, 1, false, true); return null; }   // 纯数字不是有效歌单:回退普通搜索
       const msg = r.message || '歌单加载失败';
       $('resultBody').innerHTML = `<div class="err">${esc(msg)}</div>`;
@@ -3670,12 +3701,19 @@ async function loadPlaylist(pid, fromUrl, seq) {
       return null;
     }
     const d = r.data, info = d.info || {};
-    applyListData(d.list,
-      `♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${d.list.length} 首${info.play_count ? ' · ' + info.play_count : ''}`);
-    toast(`歌单「${info.name || pid}」已加载 ${d.list.length} 首`, 'success', 2500);
-    return { list: d.list, meta: `♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${d.list.length} 首` };
+    state.list = d.list;                             // 首屏仅 PAGE_SIZE 首,后续分段续载
+    state.total = d.total || d.list.length;          // total=全单总数(后端由 trackIds 长度提供)
+    state.allPage = Math.max(1, Math.ceil(state.total / PAGE_SIZE));
+    renderResults();
+    const meta = document.querySelector('#resultBody .meta');
+    const metaText = `♫ ${info.name ? '歌单「' + info.name + '」' : ''}${info.creator || ''} · 共 ${state.total} 首${info.play_count ? ' · ' + info.play_count : ''}`;
+    if (meta && metaText) meta.textContent = '// ' + metaText;
+    autoFill(PC_INIT_TARGET);                        // 预加载:PC 补至60条/移动端撑满一屏
+    toast(`歌单「${info.name || pid}」已加载 ${d.list.length}/${state.total} 首,下滑自动续载`, 'success', 2500);
+    return { list: state.list, meta: metaText };
   } catch (e) {
     if (seq !== searchSeq) return null;
+    state.plId = '';
     if (!fromUrl) { await runSearch(pid, 1, false, true); return null; }
     $('resultBody').innerHTML = '<div class="err">歌单请求失败</div>';
     toast('歌单请求失败', 'error');
@@ -3683,11 +3721,12 @@ async function loadPlaylist(pid, fromUrl, seq) {
   }
 }
 
-/* 整包套用一组歌曲数据到结果列表(歌单/单曲/双路切换共用) */
+/* 整包套用一组歌曲数据到结果列表(单曲/双路切换共用) */
 function applyListData(list, metaText) {
   state.list = list;
   state.total = list.length;
   state.allPage = 0; state.page = 1;
+  state.plId = '';                     // 一次性整包:退出歌单分段模式
   renderResults();
   const meta = document.querySelector('#resultBody .meta');
   if (meta && metaText) meta.textContent = '// ' + metaText;
@@ -3783,6 +3822,7 @@ async function silentSearch(kw) {
 
 async function runSearch(kw, p, toastOn, noPlaylist) {
   const seq = ++searchSeq;   // 新搜索开始：作废所有在途旧搜索/旧预取响应
+  state.plId = '';           // 关键词搜索:退出歌单分段模式
   if (p === 1 && !noPlaylist) {
     dualSets = null; setSwitchTab(false);          // 新搜索开始:重置双路状态与切换标签
     const ml = parseMusicLink(kw);
@@ -3828,7 +3868,7 @@ const PREFETCH_PROGRESS = 0.65;   // 预取触发点:已加载进度的 65%
 const BOTTOM_THRESHOLD = 150;     // 距底部阈值(px):立即加载
 
 function maybePrefetch() {
-  if (loadingMore || lastAppendCount === 0 || !state.kw) return;
+  if (loadingMore || lastAppendCount === 0 || (!state.kw && !state.plId)) return;
   if (state.allPage && state.page >= state.allPage) return;
   const el = $('resultPanel');
   if (el.scrollHeight <= el.clientHeight) return;   // 未撑满一屏由 autoFill 负责
