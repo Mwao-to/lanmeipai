@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 56
-        versionName '3.43'   // 五键快捷条上边距回滚40px→10px(其余圆角/底色对齐列表的改动保留)
+        versionCode 57
+        versionName '3.44'   // 修复:部分老歌官方封面直链CDN失效(如id4083399返回404),下载弹窗封面加载失败时先http→https升级重试再试原链,仍失败则彻底隐藏不占空间并提示;封面失效同时禁用点图下载
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

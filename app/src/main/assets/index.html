@@ -1769,13 +1769,41 @@ function shareSong() {
 /* ============ 下载(弹窗选择 歌曲/歌词) ============ */
 const safeName = n => (n || '未知').replace(/[\\/:*?"<>|]/g, '_').trim();
 
+let dlCoverOk = false;                               // 当前弹窗封面是否可用(失效时禁用点图下载)
 function openDlModal() {
   if (!state.song) { toast('还没有播放中的歌曲', 'warn'); return; }
   $('dlSongName').textContent = `${state.song.name} - ${state.song.singer}`;   // 标题显示当前歌曲,单行超出截断为...
   const box = $('dlCoverBox');                       // 封面预览:与下载按钮同宽的 1:1 圆角图
-  box.innerHTML = state.song.img
-    ? `<img src="${esc(state.song.img)}" alt="cover" loading="lazy" style="cursor:pointer" title="点击下载封面(.jpg)" onclick="downloadCover()" onerror="this.parentElement.innerHTML='<div class=\'nocover\'>封面加载失败</div>'">`
-    : '<div class="nocover">无封面</div>';
+  box.style.display = '';                            // 重置上次可能的兜底隐藏
+  const raw = state.song.img || '';
+  dlCoverOk = !!raw;
+  const giveUp = () => {                             // ═══ 兕底容错:彻底隐藏,不占用空间 ═══
+    dlCoverOk = false;
+    box.innerHTML = '';
+    box.style.display = 'none';
+    toast('封面源已失效，已隐藏', 'warn');
+  };
+  if (!raw) {
+    box.innerHTML = '<div class="nocover">无封面</div>';
+  } else {
+    const up = raw.replace(/^http:\/\//i, 'https://');   // 老歌常给http直链,先升级https再试原链
+    let step = 0;
+    const make = (url) => {
+      const im = new Image();
+      im.loading = 'lazy'; im.alt = 'cover';
+      im.style.cssText = 'cursor:pointer';
+      im.title = '点击下载封面(.jpg)';
+      im.onclick = () => downloadCover();
+      im.onerror = () => {
+        if (step === 0 && url !== raw) { step = 1; make(raw); }   // 第二次:试接口原始链接
+        else giveUp();                                            // 全部失败→隐藏不占空间
+      };
+      box.innerHTML = '';
+      box.appendChild(im);
+      im.src = url;
+    };
+    make(up);
+  }
   $('dlModal').classList.add('show');
 }
 function closeDlModal() { $('dlModal').classList.remove('show'); }
@@ -1797,6 +1825,7 @@ function triggerDownload(href, filename, revoke) {
 function downloadCover() {
   const s = state.song;
   if (!s || !s.img) { toast('当前歌曲没有封面', 'warn'); return; }
+  if (!dlCoverOk) { toast('封面源已失效，无法下载', 'warn'); return; }
   nativeDownload(`${safeName(s.name)}-${safeName(s.singer)}.jpg`, s.img);
 }
 
