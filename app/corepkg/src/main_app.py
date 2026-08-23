@@ -2468,7 +2468,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   .quick-bar button {
     flex:1 1 0; min-width:0;                 /* 五键权重 1:1,等宽等大 */
-    padding:4px 0; font-family:var(--mono); font-size:8px;   /* 药丸整体缩小一半 */
+    padding:8px 0; font-family:var(--mono); font-size:16px;   /* 药丸整体放大一倍 */
     color:var(--accent-hover); background:rgba(255,255,255,.05);
     border:1px solid var(--glass-border); border-radius:99px;
     text-align:center; cursor:pointer; user-select:none; touch-action:manipulation;
