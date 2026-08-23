@@ -394,6 +394,26 @@ public class MainActivity extends Activity {
                 return "";
             }
         }
+
+        /** 读外部 Presets.json(PowerAMP导出)全文给JS;失败返回空串,JS用内置同参数副本兑底 */
+        @JavascriptInterface
+        public String eqImport() {
+            try {
+                java.io.File f = new java.io.File("/storage/emulated/0/e/Presets.json");
+                if (!f.exists()) return "";
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+                StringBuilder sb = new StringBuilder();
+                char[] buf = new char[8192];
+                int n;
+                while ((n = r.read(buf)) > 0) sb.append(buf, 0, n);
+                r.close();
+                Dbg.w(MainActivity.this, "[eq] Presets.json 已读取 " + sb.length());
+                return sb.toString();
+            } catch (Throwable t) {
+                Dbg.w(MainActivity.this, "‼️ [eq] Presets.json 读取失败(无存储权限时用内置副本)", t);
+                return "";
+            }
+        }
     }
 
     /** 向页面派发下载器事件(status: start/progress/done/error)。 */

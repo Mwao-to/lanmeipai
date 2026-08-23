@@ -1870,16 +1870,41 @@ const EQ_PRESETS = {
   '自然原声': [1,1,0,0,0,0,0,1],
   '摇滚经典': [3,2,1,1,-1,1,2,3]
 };
-let eqCtx = null, eqFilters = null;
+/* ═══ PowerAMP 预设导入(/storage/emulated/0/e/Presets.json):运行时桥读取优先,内置同参数副本兜底 ═══ */
+const EQ_IMPORT_RAW = [{"name":"中音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":-6.190838813781738,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":7.576934814453125,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":2.2439968585968018,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":3.5180978775024414,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":5.933706283569336,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":0.30017316341400146,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":1.5,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":-4.5,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":-6.0,"color":0}]},{"name":"中音","preamp":-2.1781952381134033,"parametric":true,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":576,"q":2.23799467086792,"gain":15.0,"color":-11184896},{"type":4,"channels":0,"frequency":200,"q":1.0099999904632568,"gain":-3.7450270652770996,"color":-8978313},{"type":5,"channels":0,"frequency":14331,"q":2.9439985752105713,"gain":-5.400000095367432,"color":-8947849}]},{"name":"人声","preamp":0.0,"parametric":true,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":505,"q":1.3200000524520874,"gain":3.0,"color":-6710989},{"type":2,"channels":0,"frequency":1450,"q":1.0219999551773071,"gain":6.0,"color":-13421824},{"type":0,"channels":0,"frequency":56,"q":1.0499999523162842,"gain":-8.600000381469727,"color":-7859968},{"type":1,"channels":0,"frequency":8500,"q":0.8299999833106995,"gain":-5.900000095367432,"color":-6750055}]},{"name":"低音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":2.25,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":3.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-1.5,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":-1.5,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":0.0,"color":0}]},{"name":"低音 & 高音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":2.25,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":3.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":3.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-1.5,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":-1.5,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":1.5,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":5.849999904632568,"color":0}]},{"name":"低音 & 高音","preamp":0.0,"parametric":true,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":0,"channels":0,"frequency":100,"q":1.0299999713897705,"gain":7.0,"color":-11206656},{"type":1,"channels":0,"frequency":8000,"q":0.8299999833106995,"gain":6.199999809265137,"color":-16764160}]},{"name":"平淡","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":0.0,"color":0}]},{"name":"强劲低音","preamp":0.0,"parametric":true,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":0,"channels":0,"frequency":142,"q":1.9900000095367432,"gain":7.0,"color":-16764160}]},{"name":"扬声器（响亮）","preamp":7.199999809265137,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":-2.8499999046325684,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":-2.8499999046325684,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":2.5350000858306885,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":3.615000009536743,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":4.755000114440918,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":4.680000305175781,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":5.984999656677246,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":5.998499870300293,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":3.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":3.0,"color":0}]},{"name":"摇滚","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":3.194999933242798,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":1.290000081062317,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":-2.9850001335144043,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-2.25,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":2.25,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":3.5999999046325684,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":5.849999904632568,"color":0}]},{"name":"柔和","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":5.537322044372559,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":2.48032808303833,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":0.8794105052947998,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":-2.6389083862304688,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-4.961331367492676,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":-10.5838041305542,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":-12.4435453414917,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":-13.33535099029541,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":-10.567366600036621,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":-6.71813440322876,"color":0}]},{"name":"柔和低音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":3.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":3.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":3.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":0.0,"color":0}]},{"name":"柔和低音","preamp":0.0,"parametric":true,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":4,"channels":0,"frequency":131,"q":0.9700000286102295,"gain":6.300000190734863,"color":-7859968}]},{"name":"柔和高音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":-4.5,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":-4.5,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-4.5,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":-4.5,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":4.5,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":4.5,"color":0}]},{"name":"流行","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":1.5,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":4.5,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":3.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":1.5,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":1.5,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":3.0,"color":0}]},{"name":"清晰","preamp":0.0,"parametric":true,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":3350,"q":1.25,"gain":6.0,"color":-13421824}]},{"name":"现场","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":-4.5,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":-3.75,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":2.25,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":2.25,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":2.25,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":2.25,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":2.0999999046325684,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":1.5,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":1.5,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":1.5,"color":0}]},{"name":"电子","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":-2.8499999046325684,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-2.1449999809265137,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":3.5999999046325684,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":7.380000114440918,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":7.739999771118164,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":7.485000133514404,"color":0}]},{"name":"经典","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":-4.5,"color":0}]},{"name":"舞曲","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":5.849999904632568,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":3.1499998569488525,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":2.115000009536743,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":-2.6700000762939453,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":-1.9800000190734863,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":-2.190000057220459,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":-0.5999999642372131,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":0.10500000417232513,"color":0}]},{"name":"超重低音","preamp":-2.4000000953674316,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":9.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":6.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":6.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":4.950000286102295,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-1.5,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":-1.5,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":0.0,"color":0}]},{"name":"音调 - 低音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":8.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":0.0,"color":0}]},{"name":"音调 - 低音和高音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":8.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":6.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":0.0,"color":0}]},{"name":"音调 - 高音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":6.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":0.0,"color":0}]},{"name":"高音","preamp":0.0,"parametric":false,"bands":[{"type":0,"channels":0,"frequency":90,"q":0.800000011920929,"gain":0.0,"color":0},{"type":1,"channels":0,"frequency":10000,"q":0.6000000238418579,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":31,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":62,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":124,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":249,"q":0.0,"gain":-3.0,"color":0},{"type":2,"channels":0,"frequency":498,"q":0.0,"gain":-1.5,"color":0},{"type":2,"channels":0,"frequency":996,"q":0.0,"gain":-1.5,"color":0},{"type":2,"channels":0,"frequency":1995,"q":0.0,"gain":0.0,"color":0},{"type":2,"channels":0,"frequency":3993,"q":0.0,"gain":6.299999713897705,"color":0},{"type":2,"channels":0,"frequency":7993,"q":0.0,"gain":9.59999942779541,"color":0},{"type":2,"channels":0,"frequency":16000,"q":0.0,"gain":12.300000190734863,"color":0}]}];
+(function loadImportedPresets() {          // 合并到可选预设表:重名自动加#2后缀,显示名保持原名
+  let arr = null;
+  try { const s = window.AndroidBridge && AndroidBridge.eqImport ? AndroidBridge.eqImport() : ''; if (s) arr = JSON.parse(s); } catch (e) { }
+  if (!Array.isArray(arr)) arr = EQ_IMPORT_RAW;
+  const used = new Set(Object.keys(EQ_PRESETS));
+  arr.forEach(p => {
+    if (!p || !p.name || !Array.isArray(p.bands)) return;
+    const bands = p.bands.filter(b => b && typeof b.frequency === 'number');
+    if (!bands.length) return;
+    let key = String(p.name);
+    if (used.has(key)) { let i = 2; while (used.has(key + '#' + i)) i++; key = key + '#' + i; }
+    used.add(key);
+    EQ_IMPORTED[key] = { display: String(p.name), preamp: Number(p.preamp) || 0, bands };
+  });
+})();
+function eqDisplay(name) { const o = EQ_IMPORTED[name]; return o ? o.display : name; }
+function bandToNode(f, b) {                /* PowerAMP band→BiquadFilter:0=低搁架 1=高搁架 其余=峰值 */
+  f.frequency.value = Math.min(20000, Math.max(20, Number(b.frequency) || 1000));
+  f.Q.value = Math.max(0.1, Number(b.q) || 1);
+  f.gain.value = Math.max(-24, Math.min(24, Number(b.gain) || 0));   /* 导入预设放宽至±24dB(源文件峰值+15dB) */
+  f.type = b.type === 0 ? 'lowshelf' : b.type === 1 ? 'highshelf' : 'peaking';
+}
+
+let eqCtx = null, eqFilters = null, eqPre = null, eqTail = null;
 let eqActiveName = '正常';
 let pendingAutoEq = null;                  // 启动待自动沿用的预设(非「正常」才有值)
 (function restoreEq() {                    // 恢复上次预设:私有目录eqw.json优先,localStorage兑底
-  try { const ls = localStorage.getItem('eqPreset'); if (ls && EQ_PRESETS[ls]) eqActiveName = ls; } catch (e) { }
+  try { const ls = localStorage.getItem('eqPreset'); if (ls && (EQ_PRESETS[ls] || EQ_IMPORTED[ls])) eqActiveName = ls; } catch (e) { }
   try {
     const s = window.AndroidBridge && AndroidBridge.eqLoad ? AndroidBridge.eqLoad() : '';
     if (s) {
       const o = JSON.parse(s);
-      if (o && o.preset && EQ_PRESETS[o.preset]) {
+      if (o && o.preset && (EQ_PRESETS[o.preset] || EQ_IMPORTED[o.preset])) {
         eqActiveName = o.preset;
         localStorage.setItem('eqPreset', o.preset);
       }
@@ -1888,12 +1913,20 @@ let pendingAutoEq = null;                  // 启动待自动沿用的预设(非
   if (eqActiveName !== '正常') {           // 上次用了预设:本次启动自动沿用,弹提示告知
     pendingAutoEq = eqActiveName;
     localStorage.setItem('eqArmed', '1');  // 之后每次播放前都以CORS模式挂src
-    setTimeout(() => toast(`当前使用EQ：${eqActiveName}，已生效`, 'success', 2600), 600);
+    setTimeout(() => toast(`当前使用EQ：${eqDisplay(eqActiveName)}，已生效`, 'success', 2600), 600);
   }
 })();
 function maybeAutoBuildEq() {              // 播放路径上确保启动遗留的自动预设链就绪并填参
   if (!pendingAutoEq || eqCtx) return;
-  if (!ensureEqChain()) { pendingAutoEq = null; return; }
+  const imp = EQ_IMPORTED[pendingAutoEq];
+  if (imp) {                               // 导入预设:动态链+preamp静默填参
+    if (!ensureEqChain(imp.bands.length)) { pendingAutoEq = null; return; }
+    eqPre.gain.value = Math.pow(10, imp.preamp / 20);
+    eqFilters.forEach((f, i) => { if (imp.bands[i]) bandToNode(f, imp.bands[i]); else { f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; f.gain.value = 0; } });
+    pendingAutoEq = null; renderEqList();
+    return;
+  }
+  if (!ensureEqChain(EQ_BANDS.length)) { pendingAutoEq = null; return; }
   (EQ_PRESETS[pendingAutoEq] || EQ_PRESETS['正常']).forEach((db, i) => { eqFilters[i].gain.value = clampDb(db); });
   pendingAutoEq = null;
   renderEqList();
@@ -1913,39 +1946,59 @@ function eqCorsReload() {                        // 正在播的歌要以CORS模
     if (resume) audio.play().catch(() => { });
   });
 }
-function ensureEqChain() {
-  if (eqCtx) return true;
+function ensureEqChain(n) {                // n=所需Biquad节数;已建链则按需扩容(导入预设节数不定)
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) { toast('此设备WebView不支持WebAudio，无法使用EQ', 'error'); return false; }
   try {
-    localStorage.setItem('eqArmed', '1');        // 之后每次播放前都以CORS模式挂src(playSong读)
-    audio.crossOrigin = 'anonymous';
-    eqCorsReload();
-    eqCtx = new AC();
-    const src = eqCtx.createMediaElementSource(audio);
-    let node = src;
-    eqFilters = EQ_BANDS.map(f => {
+    if (!eqCtx) {
+      localStorage.setItem('eqArmed', '1');        // 之后每次播放前都以CORS模式挂src(playSong读)
+      audio.crossOrigin = 'anonymous';
+      eqCorsReload();
+      eqCtx = new AC();
+      const src = eqCtx.createMediaElementSource(audio);
+      eqPre = eqCtx.createGain();                  // 全局preamp节(PowerAMP预设防削波)
+      src.connect(eqPre); eqTail = eqPre;
+      eqPre.connect(eqCtx.destination);
+      eqFilters = [];
+    }
+    while (eqFilters.length < n) {
       const bq = eqCtx.createBiquadFilter();
-      bq.type = 'peaking'; bq.frequency.value = f; bq.Q.value = 1.1; bq.gain.value = 0;
-      node.connect(bq); node = bq;
-      return bq;
-    });
-    node.connect(eqCtx.destination);
+      bq.type = 'peaking'; bq.frequency.value = 1000; bq.Q.value = 1; bq.gain.value = 0;
+      eqTail.disconnect();                         // 原尾节点断开输出再接入新节
+      eqTail.connect(bq);
+      eqTail = bq; eqFilters.push(bq);
+    }
+    eqTail.connect(eqCtx.destination);             // 幂等:同端点重复connect会被忽略
     return true;
   } catch (e) {
-    eqCtx = null; eqFilters = null;
+    eqCtx = null; eqFilters = null; eqPre = null; eqTail = null;
     toast('EQ初始化失败: ' + e.message, 'error');
     return false;
   }
 }
 async function applyEq(name) {
+  const imp = EQ_IMPORTED[name];
+  if (imp) {                               // PowerAMP导入预设:动态Biquad链+preamp实时生效
+    pendingAutoEq = null;
+    if (!ensureEqChain(imp.bands.length)) return;
+    try { if (eqCtx.state === 'suspended') await eqCtx.resume(); } catch (e) { }
+    eqPre.gain.value = Math.pow(10, imp.preamp / 20);
+    eqFilters.forEach((f, i) => { if (imp.bands[i]) bandToNode(f, imp.bands[i]); else { f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; f.gain.value = 0; } });
+    eqActiveName = name;
+    localStorage.setItem('eqPreset', name);
+    if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));
+    renderEqList(); closeEqModal();
+    toast('已应用EQ：' + imp.display, 'success');
+    return;
+  }
   const vals = EQ_PRESETS[name];
   if (!vals) return;
   pendingAutoEq = null;                    // 手动选择后不再走启动自动路径
-  if (name !== '正常' && !eqCtx && !ensureEqChain()) return;
+  if (name !== '正常' && !eqCtx && !ensureEqChain(vals.length)) return;
   if (eqCtx) {
     if (eqCtx.state === 'suspended') { try { await eqCtx.resume(); } catch (e) { } }
     vals.forEach((db, i) => { eqFilters[i].gain.value = clampDb(db); });   // dB硬限±6
+    for (let i = vals.length; i < eqFilters.length; i++) { const f = eqFilters[i]; f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; f.gain.value = 0; }   // 多余节扁平化(此前可能用过更长的导入链)
   }
   eqActiveName = name;
   localStorage.setItem('eqPreset', name);
@@ -1954,12 +2007,15 @@ async function applyEq(name) {
   closeEqModal();                          // 选中即生效,自动收起弹窗无需手动关闭
   toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
 }
-function renderEqList() {
-  $('eqList').innerHTML = Object.keys(EQ_PRESETS).map(n => {
-    return `<div class="eq-row${n === eqActiveName ? ' on' : ''}" onclick="applyEq('${n}')">`
-      + `<span class="eq-name">${n}</span><span class="eq-mark">㉿</span></div>`;
+let EQ_ORDER = [];
+function renderEqList() {                  // 内置13套+导入PowerAMP预设合并渲染;索引派发避免名称转义问题
+  EQ_ORDER = Object.keys(EQ_PRESETS).concat(Object.keys(EQ_IMPORTED));
+  $('eqList').innerHTML = EQ_ORDER.map((k, i) => {
+    return `<div class="eq-row${k === eqActiveName ? ' on' : ''}" onclick="applyEqIdx(${i})">`
+      + `<span class="eq-name">${esc(eqDisplay(k))}</span><span class="eq-mark">㉿</span></div>`;
   }).join('');
 }
+function applyEqIdx(i) { if (EQ_ORDER[i]) applyEq(EQ_ORDER[i]); }
 function openEqModal() {
   renderEqList();
   $('eqModal').classList.add('show');
