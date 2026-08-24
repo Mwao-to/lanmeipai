@@ -1931,7 +1931,7 @@ function eqDisplay(name) { const o = EQ_IMPORTED[name]; return o ? o.display : n
 function bandToNode(f, b) {                /* PowerAMP band→BiquadFilter:0=低搁架 1=高搁架 其余=峰值 */
   f.frequency.value = Math.min(20000, Math.max(20, Number(b.frequency) || 1000));
   f.Q.value = Math.max(0.1, Number(b.q) || 1);
-  f.gain.value = Math.max(-24, Math.min(24, Number(b.gain) || 0));   /* 导入预设放宽至±24dB(源文件峰值+15dB) */
+  setFader(f, 'gain', Math.max(-24, Math.min(24, Number(b.gain) || 0)));   /* 增益平滑过渡防咔哒 */
   f.type = b.type === 0 ? 'lowshelf' : b.type === 1 ? 'highshelf' : 'peaking';
 }
 
@@ -1975,6 +1975,25 @@ audio.addEventListener('play', () => {     // 自动播放策略:播放事件里
   if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume().catch(() => { });
 });
 const clampDb = v => Math.max(-6, Math.min(6, Number(v) || 0));   // dB硬限±6
+function setFader(f, k, v) {               /* 参数平滑过渡(15ms时间常数):消除预设切换的参数硬跳变咔哒声 */
+  try { f[k].setTargetAtTime(v, eqCtx.currentTime, 0.015); } catch (e) { try { f[k].value = v; } catch (e2) { } }
+}
+let eqPersistTimer = null;
+function persistEq(name) {                 /* 延迟持久化:快速连点时不再每次同步写localStorage+eqw.json(卡顿源之一) */
+  clearTimeout(eqPersistTimer);
+  eqPersistTimer = setTimeout(() => {
+    localStorage.setItem('eqPreset', name);
+    if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));
+  }, 250);
+}
+function markEqActive(name) {              /* 秒切关键:只切行高亮class,不重建557行DOM(全量innerHTML重排是卡顿主因) */
+  const list = $('eqList');
+  if (!list || !list.children.length) return;
+  const prev = list.querySelector('.eq-row.on');
+  if (prev) prev.classList.remove('on');
+  const idx = EQ_ORDER.indexOf(name);
+  if (idx >= 0 && list.children[idx]) list.children[idx].classList.add('on');
+}
 
 function eqCorsReload() {                        // 正在播的歌要以CORS模式重载(仅首次激活)
   if (!audio.src) return;
@@ -2028,9 +2047,8 @@ async function applyEq(name) {
     eqPre.gain.value = Math.pow(10, imp.preamp / 20);
     eqFilters.forEach((f, i) => { if (imp.bands[i]) bandToNode(f, imp.bands[i]); else { f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; f.gain.value = 0; } });
     eqActiveName = name;
-    localStorage.setItem('eqPreset', name);
-    if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));
-    renderEqList();
+    persistEq(name);                       /* 延迟持久化替代逐次同步写 */
+    markEqActive(name);                    /* 只切高亮不重建列表→零卡顿秒切 */
     toast('已应用EQ：' + imp.display, 'success');
     return;
   }
@@ -2042,15 +2060,13 @@ async function applyEq(name) {
     if (eqCtx.state === 'suspended') { try { await eqCtx.resume(); } catch (e) { } }
     eqPre.gain.value = 1;                  /* 复位preamp(此前可能被导入预设改过致串味) */
     eqFilters.forEach((f, i) => {
-      if (i < vals.length) { f.type = 'peaking'; f.frequency.value = EQ_BANDS[i]; f.Q.value = 1.1; f.gain.value = clampDb(vals[i]); }
-      else { f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; f.gain.value = 0; }
-    });                                    /* 全参重写:频率/Q也归位,清除此前导入链残留(混乱根因) */
+      if (i < vals.length) { f.type = 'peaking'; f.frequency.value = EQ_BANDS[i]; f.Q.value = 1.1; setFader(f, 'gain', clampDb(vals[i])); }
+      else { f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; setFader(f, 'gain', 0); }
+    });                                    /* 全参重写:频率/Q也归位,清除此前导入链残留(混乱根因);增益走平滑 */
   }
   eqActiveName = name;
-  localStorage.setItem('eqPreset', name);
-  if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));   // 同步持久化到私有目录eqw.json
-  renderEqList();
-  renderEqList();                          // 选中后弹窗保持打开,便于连续试听切换(v3.58)
+  persistEq(name);                         /* 延迟持久化替代逐次同步写 */
+  markEqActive(name);                      /* 只切高亮不重建557行列表→播放中秒切无感 */
   toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
 }
 let EQ_ORDER = [];

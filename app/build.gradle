@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 78
-        versionName '3.64'   // EQ音质修复:内置预设路径全参重写(频率/Q归位,清导入链残留串味)+preamp复位;新增DynamicsCompressor安全限幅器兜底削波炸裂;mergePamp全量归一化(单节增益封顶+8dB,Q下限0.5/0.6,<80Hz低频护栏+6,倍频程分区叠加校验超限折算负preamp补偿,中文命名预设上限更严±10)
+        versionCode 79
+        versionName '3.65'   // EQ预设秒切零卡顿:applyEq不再重建557行DOM列表(markEqActive只切行高亮class);持久化250ms防抖(快速连点不反复同步写localStorage+eqw.json);滤波器参数setTargetAtTime平滑过渡(15ms时间常数)消除硬跳变咔哒声
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
