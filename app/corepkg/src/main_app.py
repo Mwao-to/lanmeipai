@@ -4331,13 +4331,13 @@ function maybeAutoBuildEq() {              // 播放路径上确保启动遗留�
     if (!ensureEqChain(imp.bands.length)) { pendingAutoEq = null; return; }
     eqPre.gain.value = Math.pow(10, imp.preamp / 20);
     eqFilters.forEach((f, i) => { if (imp.bands[i]) bandToNode(f, imp.bands[i]); else { f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; f.gain.value = 0; } });
-    pendingAutoEq = null; renderEqList();
+    pendingAutoEq = null; resetEqList();
     return;
   }
   if (!ensureEqChain(EQ_BANDS.length)) { pendingAutoEq = null; return; }
   (EQ_PRESETS[pendingAutoEq] || EQ_PRESETS['正常']).forEach((db, i) => { eqFilters[i].gain.value = clampDb(db); });
   pendingAutoEq = null;
-  renderEqList();
+  resetEqList();
 }
 audio.addEventListener('play', () => {     // 自动播放策略:播放事件里恢复被挂起的EQ上下文
   if (eqCtx && eqCtx.state === 'suspended') eqCtx.resume().catch(() => { });
@@ -4354,13 +4354,13 @@ function persistEq(name) {                 /* 延迟持久化:快速连点时不
     if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: name }));
   }, 250);
 }
-function markEqActive(name) {              /* 秒切关键:只切行高亮class,不重建557行DOM(全量innerHTML重排是卡顿主因) */
+function markEqActive(name) {              /* 秒切关键:只切行高亮class,不重建DOM;懒加载下按data-idx定位(未渲染到的行由renderEqRows生成时自带on类) */
   const list = $('eqList');
-  if (!list || !list.children.length) return;
+  if (!list) return;
   const prev = list.querySelector('.eq-row.on');
   if (prev) prev.classList.remove('on');
   const idx = EQ_ORDER.indexOf(name);
-  if (idx >= 0 && list.children[idx]) list.children[idx].classList.add('on');
+  if (idx >= 0) { const row = list.querySelector('.eq-row[data-idx="' + idx + '"]'); if (row) row.classList.add('on'); }
 }
 
 function eqCorsReload() {                        // 正在播的歌要以CORS模式重载(仅首次激活)
@@ -4437,22 +4437,63 @@ async function applyEq(name) {
   markEqActive(name);                      /* 只切高亮不重建557行列表→播放中秒切无感 */
   toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
 }
+/* ═══ 懒加载渲染(v3.67 弹窗秒开):全量innerHTML重建557行是点击音效卡顿主因 ═══
+ * 首屏只渲20条瞬时开窗;滚动触底按 40→80→80… 递增追加,增量拼接无全量重排,0延迟无感加载 */
 let EQ_ORDER = [];
-function renderEqList() {                  // 内置13套+导入PowerAMP预设合并渲染;索引派发避免名称转义问题;带序号方便定位
-  EQ_ORDER = Object.keys(EQ_PRESETS).concat(Object.keys(EQ_IMPORTED));
-  $('eqList').innerHTML = EQ_ORDER.map((k, i) => {
-    return `<div class="eq-row${k === eqActiveName ? ' on' : ''}" onclick="applyEqIdx(${i})">`
-      + `<span class="eq-num">${i + 1}.</span><span class="eq-name">${esc(eqDisplay(k))}</span><span class="eq-mark">㉿</span></div>`;
-  }).join('');
+const EQ_BATCH = [20, 40, 80];             // 首屏20条→首次触底+40→此后每次+80封顶
+let eqRendered = 0;                        // 已渲染行数(窗口游标)
+let eqLoadPtr = 0;                         // 批次步进指针
+let eqFilterMode = false;                  // 搜索中:列表只含匹配行(保留原序号索引)
+let eqRenderedBefore = 0;                  // 进搜索前已渲染进度,清空搜索后还原
+function eqRowHtml(k, i) {
+  return `<div class="eq-row${k === eqActiveName ? ' on' : ''}" data-idx="${i}" onclick="applyEqIdx(${i})">`
+    + `<span class="eq-num">${i + 1}.</span><span class="eq-name">${esc(eqDisplay(k))}</span><span class="eq-mark">㉿</span></div>`;
 }
-function filterEqList(q) {                 /* 搜索过滤:按名称或序号匹配,空串恢复全部557行 */
+function renderEqRows(n) {                 // 从游标处追加n行:insertAdjacentHTML增量拼接,不动已有行
+  if (eqRendered >= EQ_ORDER.length) return;
+  const end = Math.min(EQ_ORDER.length, eqRendered + n);
+  let h = '';
+  for (let i = eqRendered; i < end; i++) h += eqRowHtml(EQ_ORDER[i], i);
+  $('eqList').insertAdjacentHTML('beforeend', h);
+  eqRendered = end;
+}
+function resetEqList() {                   // 重置窗口并渲染首屏20条(替代原renderEqList全量重建)
+  EQ_ORDER = Object.keys(EQ_PRESETS).concat(Object.keys(EQ_IMPORTED));
+  eqRendered = 0; eqLoadPtr = 1; eqFilterMode = false; eqRenderedBefore = 0;   // 批次0已被首屏20条消费,触底从40起
+  $('eqList').scrollTop = 0;
+  $('eqList').innerHTML = '';
+  renderEqRows(EQ_BATCH[0]);
+}
+function maybeLoadMore() {                 /* 触底加载:距底部60px内触发;批次按EQ_BATCH递增;补齐循环防首屏不满一屏 */
+  if (eqFilterMode || eqRendered >= EQ_ORDER.length) return;
+  const list = $('eqList');
+  if (list.scrollTop + list.clientHeight < list.scrollHeight - 60) return;
+  const n = EQ_BATCH[Math.min(eqLoadPtr, EQ_BATCH.length - 1)];
+  if (eqLoadPtr < EQ_BATCH.length - 1) eqLoadPtr++;
+  renderEqRows(n);
+  let g = 0;                               // 追加后仍不足一屏则继续补(上限防意外死循环)
+  while (g++ < 4 && eqRendered < EQ_ORDER.length && list.scrollHeight - list.clientHeight < 40) renderEqRows(20);
+}
+$('eqList').addEventListener('scroll', maybeLoadMore);
+let eqSearchTimer = null;
+function filterEqList(q) { clearTimeout(eqSearchTimer); eqSearchTimer = setTimeout(() => doFilterEq(q), 120); }   // 输入防抖120ms
+function doFilterEq(q) {                   /* 搜索过滤:按名称或序号匹配;只重建匹配行(带原序号),清空后还原触底前窗口 */
   q = (q || '').trim().toLowerCase();
-  const rows = $('eqList').children;
-  EQ_ORDER.forEach((k, i) => {
-    if (!rows[i]) return;
-    const hit = !q || eqDisplay(k).toLowerCase().indexOf(q) >= 0 || String(i + 1).indexOf(q.replace(/\D/g, '')) >= 0 && /\d/.test(q);
-    rows[i].style.display = hit ? '' : 'none';
-  });
+  const list = $('eqList');
+  if (!q) {
+    if (!eqFilterMode) return;
+    list.innerHTML = ''; eqRendered = 0; eqFilterMode = false;
+    renderEqRows(Math.max(EQ_BATCH[0], Math.min(eqRenderedBefore, EQ_ORDER.length)));
+    return;
+  }
+  if (!eqFilterMode) { eqRenderedBefore = eqRendered; eqFilterMode = true; }
+  const num = q.replace(/\D/g, '');
+  let h = '', cnt = 0;
+  for (let i = 0; i < EQ_ORDER.length; i++) {
+    const k = EQ_ORDER[i];
+    if (eqDisplay(k).toLowerCase().indexOf(q) >= 0 || (/\d/.test(q) && String(i + 1).indexOf(num) >= 0)) { h += eqRowHtml(k, i); cnt++; }
+  }
+  list.innerHTML = cnt ? h : '<div class="eq-row"><span class="eq-name">无匹配预设</span></div>';
 }
 function findEqFirst() {                   /* 跳到第一个匹配行并闪烁提示 */
   const rows = $('eqList').children;
@@ -4467,8 +4508,8 @@ function findEqFirst() {                   /* 跳到第一个匹配行并闪烁�
 }
 function applyEqIdx(i) { if (EQ_ORDER[i]) applyEq(EQ_ORDER[i]); }
 function openEqModal() {
-  renderEqList();
-  $('eqModal').classList.add('show');
+  $('eqModal').classList.add('show');      // 先开窗后渲染:首屏仅20条瞬时完成,点击音效零延迟
+  resetEqList();
 }
 function closeEqModal() { $('eqModal').classList.remove('show'); }
 $('eqModal').addEventListener('click', e => { if (e.target.id === 'eqModal') closeEqModal(); });

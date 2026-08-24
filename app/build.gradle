@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 80
-        versionName '3.66'   // EQ弹窗:预设行加序号1~557方便定位;C键文本EQ改音效;标题改音效·EQ(内置300+);标题下新增透明搜索框+查找按钮同行布局(样式与eq-row同透明度同圆角,输入实时过滤名称/序号,查找跳到首个匹配行闪烁);播放器进度条圆点改translateY(-50%)+box-sizing几何精确居中(旧margin法偏下),时间标签line-height=条高与线对齐
+        versionCode 81
+        versionName '3.67'   // EQ弹窗秒开·懒加载分批渲染:先开窗后渲染首屏仅20条;触底40→80→80递增追加insertAdjacentHTML无全量重排;markEqActive改data-idx定位;搜索只重建匹配行+120ms防抖,清空还原触底前窗口
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
