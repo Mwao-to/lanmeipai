@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 95
-        versionName '3.81'   // ①空态文案:'尚未配置任何音源文件'→'// 支持洛雪(lx)协议音源js文件',删除副文案'支持洛雪(LX)协议音源.JS'及其样式(.src-empty-sub)
+        versionCode 96
+        versionName '3.82'   // ①修复:自检判定歌曲播放(musicUrl)接口失效后播放仍重试并误报'网络环境较差'→取链入口直接FAILED_SRC跳过,专属提醒'歌曲播放接口已失效无法播放'(每源一次),回滚上一曲不再弹网络差兜底
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

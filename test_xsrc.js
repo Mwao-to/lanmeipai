@@ -115,6 +115,19 @@ function getSongId(m) { return m.songmid || m.id }`;
   stopXsrc(true);
   global.toast = () => { };
 
+  console.log('[8] 取链接口失效:直接FAILED_SRC不重试不误报网络差(静态+自检行为断言)');
+  global.toast = m => { toasts7.push(String(m)); };
+  const deadUrlSrc = fakeSrc.replace("return Promise.resolve('http://cdn.example/' + getSongId(info.musicInfo))", "return Promise.resolve('')");
+  ok(deadUrlSrc !== fakeSrc, '死链源构造成功');
+  toasts7.length = 0;
+  await loadXsrc('deadurl.js', deadUrlSrc, true);
+  t7 = Date.now();
+  while (!toasts7.some(t => t.includes('歌曲链接 ✗')) && Date.now() - t7 < 3000) await new Promise(r => setTimeout(r, 20));
+  ok(toasts7.some(t => t.includes('歌曲链接 ✗')), '自检判定歌曲链接✗');
+  ok(/ok\.musicUrl === false/.test(html) && /notifyBadOnce\('musicUrl'\)/.test(html) && /'FAILED_SRC'/.test(html) && !/res === 'FAILED_SRC'[\s\S]{0,200}网络环境较差/.test(html), '取链入口失效守卫→FAILED_SRC且不落入网络差分支');
+  stopXsrc(true);
+  global.toast = () => { };
+
   console.log(`\n═══ 结果: ${pass} 通过, ${fail} 失败 ═══`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('✗ 桩异常:', e); process.exit(1); });

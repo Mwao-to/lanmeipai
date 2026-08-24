@@ -1202,8 +1202,10 @@ function notifyBadOnce(kind) {
   const key = (xsrcHandler ? xsrcHandler.file : '') + ':' + kind;
   if (xsrcBadToasted[key]) return;
   xsrcBadToasted[key] = true;
+  const name = xsrcHandler ? xsrcHandler.name : '';
+  if (kind === 'musicUrl') { toast('音源「' + name + '」的歌曲播放接口已失效，无法播放该歌曲', 'error', 3800); return; }   /* v3.82 */
   const label = kind === 'lyric' ? '歌词' : '图片';
-  toast('音源「' + (xsrcHandler ? xsrcHandler.name : '') + '」的' + label + '接口已失效，已跳过（不影响歌曲播放）', 'warn', 3400);
+  toast('音源「' + name + '」的' + label + '接口已失效，已跳过（不影响歌曲播放）', 'warn', 3400);
 }
 async function autoCheckXsrc(ctx) {
   const probe = { songmid: '5257138', name: '屋顶', singer: '周杰伦' };
@@ -2035,6 +2037,10 @@ function withTimeout(promise, ms) {
 
 /* 返回：成功响应对象 | 'EXPIRED'=期间已切歌 | 'FAILED'=三次均失败 */
 async function fetchUrlWithRetry(song, seq, onRetry) {
+  if (xsrcActive() && xsrcHandler.ok && xsrcHandler.ok.musicUrl === false) {   /* v3.82:自检判定取链接口失效→直接失败,不走重试不误报网络差 */
+    notifyBadOnce('musicUrl');
+    return 'FAILED_SRC';
+  }
   for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
     try {
       const rq = xsrcActive()
@@ -2106,6 +2112,12 @@ async function play(i, list) {
       }
     });
     if (res === 'EXPIRED') return;                  // 过期响应:用户已切歌,丢弃
+    if (res === 'FAILED_SRC') {                     // v3.82:音源取链接口已失效(notifyBadOnce已提醒):回滚但不弹兜底误导提示
+      setPlayerLine($('nowName'), '音源失效');
+      setPlayerLine($('nowArtist'), '歌曲播放接口不可用');
+      rollbackPlayback(prev);
+      return;
+    }
     if (res === 'FAILED') {                         // 三次均失败:提示 + 回滚上一曲
       setPlayerLine($('nowName'), '网络较差');
       setPlayerLine($('nowArtist'), '稍后重新尝试');
