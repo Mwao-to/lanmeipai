@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 101
-        versionName '3.87'   // 修复v3.86加密遗漏:AGP的assets.excludes对mergeAssets不生效致明文index.html仍随包→明文源移至app/htmlsrc/(不在assets目录,物理上不可能进APK),packEncryptedHtml改读htmlsrc生成index.bin;测试桩新增htmlsrc断言共37项
+        versionCode 102
+        versionName '3.88'   // ①滑动开关打开态白点右移0.2px(translateX 16→16.2px)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

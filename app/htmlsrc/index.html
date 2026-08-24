@@ -368,7 +368,7 @@
   .switch { position:absolute; right:9px; top:50px; width:38px; height:20px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }   /* v3.77:删除钮下沿(~y25)+25px间距→top:50px */
   .switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
   .switch.on { background:rgba(236,65,65,.55); }
-  .switch.on::after { transform:translateX(16px); background:#fff; }
+  .switch.on::after { transform:translateX(16.2px); background:#fff; }   /* v3.88:白点再往右0.2px */
   .src-empty { text-align:center; padding:26px 0 22px; display:none; }
   .src-empty-txt { font-size:10px; color:var(--muted); margin-bottom:14px; }
   /* 校验进行/报告弹窗(v3.72):实时日志+完成汇总,随时可关闭返回管理列表 */
