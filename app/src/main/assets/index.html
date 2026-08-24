@@ -349,33 +349,31 @@
   }
   @media (hover:hover) { .quick-bar button:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
   .quick-bar button svg { display:block; margin:0 auto; }   /* v3.70:A/B/C改SVG图标按钮,直读意境 */
-  /* ═══ D键·自定义音源弹窗(v3.72):行卡片统一高度,右上角[校验|删除],右侧居中开关,单行跑马灯 ═══ */
-  .srcbox { width:min(92vw,560px); }
-  .src-statusrow { display:none; align-items:flex-end; gap:10px; margin:4px 0 10px; }
-  .src-status { flex:1; min-width:0; font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.45; }
-  .src-status.on { color:#7ee787; }
-  .src-import-sm { flex-shrink:0; width:auto; margin:0; padding:8px 14px; font-size:11px; }
-  .src-listbox { max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; flex-direction:column; gap:8px; scrollbar-width:none; }
-  .src-listbox::-webkit-scrollbar { display:none; }          /* v3.72:去拖动条 */
-  .src-item { position:relative; box-sizing:border-box; min-height:70px; padding:9px 64px 9px 12px; border-radius:var(--r-md); background:var(--glass-thin); border:1px solid var(--glass-border); }
-  .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }   /* 仅变色不改尺寸,行高统一 */
-  .src-namebox { margin-right:104px; }                        /* 给右上角[校验][删除]让位 */
-  .src-metabox { margin-top:5px; }
+  /* ═══ D键·自定义音源弹窗(v3.73):弹窗自身限高,列表在剩余空间内滚动永不外溢;全字号统一10px ═══ */
+  .srcbox { width:min(92vw,560px); max-height:min(76vh,620px); display:flex; flex-direction:column; }
+  .src-foot2 { display:none; justify-content:flex-end; flex-shrink:0; margin-top:10px; }
+  .src-import-sm { width:auto; margin:0; padding:8px 14px; font-size:10px; }
+  .src-listbox { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; flex-direction:column; gap:7px; scrollbar-width:none; contain:paint; }
+  .src-listbox::-webkit-scrollbar { display:none; }          /* 去拖动条 */
+  .src-item { position:relative; box-sizing:border-box; height:56px; flex-shrink:0; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:var(--glass-thin); border:1px solid var(--glass-border); }
+  .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }   /* 仅变色不改尺寸 */
+  .src-namebox { margin-right:96px; }                         /* 给右上角[校验][删除]让位 */
+  .src-metabox { margin-top:3px; }
   .src-mq { overflow:hidden; white-space:nowrap; }
   .src-mq > span { display:inline-block; will-change:transform; }
   .src-mq.run > span { animation:srcMq var(--mq-dur,8s) linear infinite alternate; }
   @keyframes srcMq { from{transform:translateX(0)} to{transform:translateX(var(--mq-shift,-40px))} }
-  .src-name { font-size:13px; color:var(--text-bright); line-height:1.5; }
+  .src-name { font-size:10px; color:var(--text-bright); line-height:1.5; }
   .src-meta { font-size:10px; color:var(--muted); line-height:1.5; }
-  .src-topbtns { position:absolute; top:7px; right:8px; display:flex; gap:6px; }
-  .src-btn { flex-shrink:0; font-size:10px; padding:3px 9px; border-radius:7px; border:1px solid var(--glass-border); background:rgba(255,255,255,.06); color:var(--text-bright); cursor:pointer; font-family:var(--mono); line-height:1.5; transition:border-color .15s ease; }
+  .src-topbtns { position:absolute; top:5px; right:6px; display:flex; gap:5px; }
+  .src-btn { flex-shrink:0; font-size:10px; padding:2px 8px; border-radius:7px; border:1px solid var(--glass-border); background:rgba(255,255,255,.06); color:var(--text-bright); cursor:pointer; font-family:var(--mono); line-height:1.5; transition:border-color .15s ease; }
   .src-btn.del { color:#ff7b72; }
-  .switch { position:absolute; right:10px; top:calc(50% + 8px); transform:translateY(-50%); width:40px; height:22px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }
-  .switch::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
+  .switch { position:absolute; right:9px; top:calc(50% + 10px); transform:translateY(-50%); width:38px; height:20px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }
+  .switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
   .switch.on { background:rgba(236,65,65,.55); }
-  .switch.on::after { transform:translateX(18px); background:#fff; }
-  .src-empty { text-align:center; padding:34px 0 26px; display:none; }
-  .src-empty-txt { font-size:12px; color:var(--muted); margin-bottom:14px; }
+  .switch.on::after { transform:translateX(16px); background:#fff; }
+  .src-empty { text-align:center; padding:30px 0 24px; display:none; }
+  .src-empty-txt { font-size:10px; color:var(--muted); margin-bottom:14px; }
   .src-empty-sub { font-size:10px; color:var(--muted); opacity:.7; margin-top:10px; }
   /* 校验进行/报告弹窗(v3.72):实时日志+完成汇总,随时可关闭返回管理列表 */
   .vrfybox { width:min(88vw,480px); }
@@ -737,15 +735,14 @@
   <div class="modal-box srcbox">
     <button class="modal-x" onclick="closeSrcModal()" title="关闭">○</button>
     <div class="modal-title">音源 · 自定义第三方源</div>
-    <div class="src-statusrow" id="srcStatusRow">
-      <div class="src-status" id="srcActiveTip">当前策略：内置三通道（官方接口 → 第三方解析 → Cookie兑底）</div>
-      <button class="modal-btn secondary src-import-sm" onclick="srcPickImport()">导入音源文件</button>
-    </div>
     <div class="src-listbox" id="srcListBox"></div>
     <div class="src-empty" id="srcEmpty">
       <div class="src-empty-txt">尚未配置任何音源文件</div>
       <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入自定义第三方音源</button>
       <div class="src-empty-sub">支持洛雪(LX)协议音源脚本 · 存于应用私有目录 · 卸载即清</div>
+    </div>
+    <div class="src-foot2" id="srcFoot2">
+      <button class="modal-btn secondary src-import-sm" onclick="srcPickImport()">导入音源文件</button>
     </div>
   </div>
 </div>
@@ -1309,12 +1306,7 @@ function finishVrfy(good, bad, wasActive) {
     '<br><span style="font-size:10px;color:var(--muted)">' + (wasActive ? '该音源当前启用中。可关闭本窗继续管理其他音源。' : '如需启用请回到列表打开开关；可关闭本窗继续操作。') + '</span>';
   toast('校验完成：' + good + '项可用' + (bad ? '，' + bad + '项废弃' : ''), bad ? 'warn' : 'success', 3000);
 }
-function updateXsrcTip() {
-  const tip = $('srcActiveTip');
-  if (!tip) return;
-  if (xsrcHandler) { tip.textContent = '当前策略：音源「' + xsrcHandler.name + '」全局接管中（官方/第三方/Cookie 已停用）'; tip.classList.add('on'); }
-  else { tip.textContent = '当前策略：内置三通道（官方接口 → 第三方解析 → Cookie兑底）'; tip.classList.remove('on'); }
-}
+function updateXsrcTip() { }                   /* v3.73:策略状态文本已按需求移除,保留空函数兼容旧调用点 */
 function initSrcMq(scope) {                     /* 单行溢出自动跑马灯(v3.72) */
   scope.querySelectorAll('.src-mq').forEach(el => {
     const sp = el.firstChild;
@@ -1332,10 +1324,10 @@ function initSrcMq(scope) {                     /* 单行溢出自动跑马灯(v
 function renderSrcList() {
   let files = [];
   try { files = JSON.parse(bridgeCall('srcList') || '[]'); } catch (e) { }
-  const box = $('srcListBox'), empty = $('srcEmpty'), srow = $('srcStatusRow');
+  const box = $('srcListBox'), empty = $('srcEmpty'), foot2 = $('srcFoot2');
   if (!box) return;
   empty.style.display = files.length ? 'none' : 'block';
-  if (srow) srow.style.display = files.length ? 'flex' : 'none';   /* 有文件才显示策略行+右下角导入钮 */
+  if (foot2) foot2.style.display = files.length ? 'flex' : 'none';   /* 有文件才显示右下角导入钮 */
   box.style.display = files.length ? 'flex' : 'none';
   updateXsrcTip();
   box.innerHTML = files.map(f => {
