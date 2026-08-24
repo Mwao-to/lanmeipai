@@ -1168,6 +1168,7 @@ async function loadXsrc(fileName, code, silent) {
 }
 function stopXsrc(quiet) {
   if (xsrcHandler && !quiet) toast('音源「' + xsrcHandler.name + '」已停用，恢复内置三通道策略', 'success', 3000);
+  if (xsrcHandler) Object.keys(xsrcBadToasted).forEach(k => { if (k.indexOf(xsrcHandler.file + ':') === 0) delete xsrcBadToasted[k]; });   /* v3.85:去重键随停用清理,重启用后提醒不再被旧键吞掉 */
   xsrcHandler = null;
   localStorage.removeItem('xsrc_active');
   updateXsrcTip();
@@ -1207,21 +1208,27 @@ function notifyBadOnce(kind) {
   const label = kind === 'lyric' ? '歌词' : '图片';
   toast('音源「' + name + '」的' + label + '接口已失效，已跳过（不影响歌曲播放）', 'warn', 3400);
 }
+/* 统一判定口径(v3.85):三套校验(导入适配/启用自检/手动校验)共用——musicUrl/pic须http(s)直链,lyric非空即可 */
+const XSRC_PROBE = { songmid: '5257138', name: '屋顶', singer: '周杰伦' };   // 标准探针曲
+function judgeXsrcVal(action, v) {
+  const s = typeof v === 'string' ? v : String((v && v.lyric) || '');
+  if (!s.trim()) return { ok: false, why: '空内容' };
+  if (action !== 'lyric' && !/^https?:\/\//i.test(s)) return { ok: false, why: '返回非直链' };
+  return { ok: true, val: s.trim() };
+}
 async function autoCheckXsrc(ctx) {
-  const probe = { songmid: '5257138', name: '屋顶', singer: '周杰伦' };
+  const probe = XSRC_PROBE;                    /* v3.85:探针曲与手动校验共用常量 */
   const res = {};
-  const test = async (action, fn, isUrl) => {
+  const test = async (action, fn) => {
     try {
+      /* 自检9s快检(三条串行求快);手动校验走xsrcCallOn内置12s全量——超时差异是刻意的,判定标准同源 */
       const v = await Promise.race([fn(), new Promise((_, rej) => setTimeout(() => rej(new Error('超时')), 9000))]);
-      const s = typeof v === 'string' ? v : String((v && v.lyric) || '');
-      if (!s.trim()) throw new Error('空');
-      if (isUrl && !/^https?:\/\//i.test(s)) throw new Error('非直链');
-      res[action] = true;
+      res[action] = judgeXsrcVal(action, v).ok;
     } catch (e) { res[action] = false; }
   };
-  await test('musicUrl', () => xsrcCallOn(ctx, 'musicUrl', probe, '128k'), true);
-  if (ctx.actions.has('lyric')) await test('lyric', () => xsrcCallOn(ctx, 'lyric', probe), false);
-  if (ctx.actions.has('pic')) await test('pic', () => xsrcCallOn(ctx, 'pic', probe, '128k'), true);
+  await test('musicUrl', () => xsrcCallOn(ctx, 'musicUrl', probe, '128k'));
+  if (ctx.actions.has('lyric')) await test('lyric', () => xsrcCallOn(ctx, 'lyric', probe));
+  if (ctx.actions.has('pic')) await test('pic', () => xsrcCallOn(ctx, 'pic', probe, '128k'));
   if (xsrcHandler !== ctx) return;             // 已切别的源,结果作废
   ctx.ok = res;                                // 播放期据此决定跳过或重试
   const parts = [];
@@ -1283,7 +1290,7 @@ async function runVerify(fileName) {
   try { ctx = wasActive ? xsrcHandler : await runXsrc(fileName, bridgeCall('srcRead', fileName) || '', false); } catch (e) { }
   if (!ctx || ctx.fail) { vLog('✗ 音源无法运行：' + ((ctx && ctx.fail) || '加载异常'), 'bad'); return finishVrfy(0, 1, wasActive); }
   vLog('✓ 协议握手成功 · 平台 ' + Object.keys(ctx.sources).length + ' 个 · 接口 ' + [...ctx.actions].join('/'), 'ok');
-  const probe = (state.song && state.song.songmid) ? state.song : { songmid: '5257138', name: '屋顶', singer: '周杰伦' };
+  const probe = (state.song && state.song.songmid) ? state.song : XSRC_PROBE;   /* v3.85:优先当前歌(真实环境),否则标准探针曲 */
   let good = 0, bad = 0;
   const step = async label => {
     if (vrfyAbort) throw new Error('__abort__');
@@ -1293,11 +1300,22 @@ async function runVerify(fileName) {
   };
   let url = '';
   try {
-    await step(async () => { url = String(await xsrcCallOn(ctx, 'musicUrl', probe, '128k')); if (!/^https?:\/\//i.test(url)) throw new Error('返回非直链'); return '歌曲链接可用'; });
-    await step(async () => { if (!/^https?:\/\//.test(url)) throw new Error('无可用直链'); return '下载直链可下'; });
-    if (ctx.actions.has('lyric')) await step(async () => { const t = await xsrcCallOn(ctx, 'lyric', probe); const s = typeof t === 'string' ? t : String((t && t.lyric) || ''); if (!s.trim()) throw new Error('空内容'); return '歌词接口可用'; });
+    await step(async () => {
+      const j = judgeXsrcVal('musicUrl', await xsrcCallOn(ctx, 'musicUrl', probe, '128k'));   /* v3.85:统一判定口径 */
+      if (!j.ok) throw new Error(j.why);
+      url = j.val; return '歌曲链接可用';
+    });
+    await step(async () => {                                          /* v3.85:真·可下性探测——经 xhttp代理发HEAD验可达性,不再只查格式 */
+      if (!/^https?:\/\//.test(url)) throw new Error('无可用直链');
+      try {
+        const hr = await api('/api/xhttp?url=' + encodeURIComponent(url) + '&method=head&timeout=8');
+        if (!hr || hr.code !== 200 || (hr.status >= 400)) throw new Error('HTTP ' + ((hr && hr.status) || '?'));
+        return '下载直链可下(HTTP ' + hr.status + ')';
+      } catch (e) { throw new Error('直链不可达:' + String(e.message || e).slice(0, 30)); }
+    });
+    if (ctx.actions.has('lyric')) await step(async () => { const j = judgeXsrcVal('lyric', await xsrcCallOn(ctx, 'lyric', probe)); if (!j.ok) throw new Error(j.why); return '歌词接口可用'; });
     else vLog('－ 歌词接口未声明', 'dim');
-    if (ctx.actions.has('pic')) await step(async () => { const u = String(await xsrcCallOn(ctx, 'pic', probe, '128k')); if (!/^https?:\/\//i.test(u)) throw new Error('返回非直链'); return '图片接口可用'; });
+    if (ctx.actions.has('pic')) await step(async () => { const j = judgeXsrcVal('pic', await xsrcCallOn(ctx, 'pic', probe, '128k')); if (!j.ok) throw new Error(j.why); return '图片接口可用'; });
     else vLog('－ 图片接口未声明', 'dim');
   } catch (e) { if (e.message !== '__abort__') { vLog('✗ 异常中断：' + String(e.message || e).slice(0, 60), 'bad'); bad++; } }
   if (!vrfyAbort) Object.keys(ctx.sources).forEach(k => vLog('· 平台 ' + k + '：' + (ctx.sources[k].actions || []).join(','), 'dim'));

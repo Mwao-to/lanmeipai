@@ -132,6 +132,13 @@ function getSongId(m) { return m.songmid || m.id }`;
   ok(/wholeDead[^\n]*\n[\s\S]{0,160}xsrcSkip: true/.test(html), '整源不可用→不兑底静默跳过分支存在');
   ok(/useSrcLyric/.test(html) && /歌词失效但歌曲可播→静默兑底官方歌词/.test(html), '失效但可播→兑底官方分支存在');
 
+  console.log('[10] 统一判定口径judgeXsrcVal+SAF初始定位');
+  ok(judgeXsrcVal('musicUrl', 'http://a/b.mp3').ok && !judgeXsrcVal('musicUrl', 'ftp://x').ok && !judgeXsrcVal('musicUrl', '').ok, 'musicUrl须http直链');
+  ok(judgeXsrcVal('lyric', '[00:01]词').ok && !judgeXsrcVal('lyric', '   ').ok, 'lyric只要求非空(允许非直链)');
+  ok(!judgeXsrcVal('pic', 'not-a-url').ok && judgeXsrcVal('pic', { lyric: '' }).ok === false, 'pic同musicUrl口径');
+  ok(/const XSRC_PROBE = \{ songmid: '5257138', name: '屋顶'/.test(block), '探针曲常量共用');
+  ok(/EXTRA_INITIAL_URI/.test(fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/binsys/wy/MainActivity.java'), 'utf8')), 'SAF初始定位音源目录');
+
   console.log(`\n═══ 结果: ${pass} 通过, ${fail} 失败 ═══`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('✗ 桩异常:', e); process.exit(1); });

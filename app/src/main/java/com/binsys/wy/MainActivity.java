@@ -517,7 +517,7 @@ public class MainActivity extends Activity {
             }
         }
 
-        /** 调起系统文件管理器(SAF ACTION_OPEN_DOCUMENT)选音源文件;结果经__onSrcPick回传页面 */
+        /** 调起系统文件管理器(SAF ACTION_OPEN_DOCUMENT)选音源文件;初始定位 /storage/emulated/0/音源/,结果经__onSrcPick回传页面 */
         @JavascriptInterface
         public void srcPick() {
             runOnUiThread(() -> {
@@ -525,6 +525,11 @@ public class MainActivity extends Activity {
                     Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                     i.addCategory(Intent.CATEGORY_OPENABLE);
                     i.setType("*/*");
+                    try {                                                        /* v3.85:初始定位用户音源目录,目录不存在时系统自动回退 */
+                        Uri init = android.provider.DocumentsContract.buildDocumentUri(
+                                "com.android.externalstorage.documents", "primary:音源");
+                        i.putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, init);
+                    } catch (Throwable ignored) { }
                     startActivityForResult(i, REQ_SRC_PICK);
                 } catch (Throwable t) {
                     Dbg.w(MainActivity.this, "‼️ [src] 文件选择器不可用", t);
