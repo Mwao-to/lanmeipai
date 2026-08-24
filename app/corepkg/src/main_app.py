@@ -2604,13 +2604,14 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .p-bar { flex:1; height:5px; background:rgba(255,255,255,.09); border-radius:3px; overflow:visible; box-shadow:inset 0 1px 2px rgba(0,0,0,.5); }
   .p-fill { height:100%; width:0%; background:var(--grad-brand); border-radius:3px; transition:width .2s linear; position:relative; }
   .p-fill::after {
-    content:""; position:absolute; right:-5px; top:50%; width:11px; height:11px; margin-top:-5.5px;
-    border-radius:50%; background:#fff;
+    content:""; position:absolute; right:-5.5px; top:50%; width:11px; height:11px;
+    border-radius:50%; background:#fff; box-sizing:border-box;
     border:2px solid var(--accent-hover); box-shadow:0 0 8px rgba(236,65,65,.55);
+    transform:translateY(-50%);                                    /* 几何精确居中于进度线(旧margin法受边框盒模型影响偏下) */
     transition:transform var(--t-press) var(--spring);
   }
-  .p-seekrow .p-bar:active .p-fill::after { transform:scale(1.5); }   /* 拖动时滑块弹性放大 */
-  .p-time { font-family:var(--mono); font-size:10.5px; color:var(--muted); white-space:nowrap; }
+  .p-seekrow .p-bar:active .p-fill::after { transform:translateY(-50%) scale(1.5); }   /* 拖动时滑块弹性放大 */
+  .p-time { font-family:var(--mono); font-size:10.5px; color:var(--muted); white-space:nowrap; line-height:5px; }   /* 行高=进度条高度,时间数字与线条同轴对齐 */
 
   /* ============ 下载标签 + 弹窗 ============ */
   .dl-tag {
@@ -2649,6 +2650,24 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
   .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:10.1px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
   .eq-row.on .eq-mark { color:var(--accent-hover); }
+  /* 预设序号 + 搜索行 */
+  .eq-num { flex-shrink:0; min-width:30px; font-family:var(--mono); font-size:10.5px; color:#55555c; }
+  .eq-srow { display:flex; gap:6px; margin-top:10px; align-self:stretch; }
+  .eq-srow input {
+    flex:1; min-width:0; background:rgba(255,255,255,.04); border:1px solid var(--glass-border);
+    border-radius:var(--r-md); color:var(--text); font-size:10.5px; padding:6px 9px; outline:none;
+    transition:border-color .15s ease;
+  }
+  .eq-srow input::placeholder { color:var(--muted); }
+  .eq-srow input:focus { border-color:rgba(236,65,65,.45); }
+  .eq-srow button {
+    flex:0 0 auto; background:rgba(255,255,255,.04); border:1px solid var(--glass-border);
+    border-radius:var(--r-md); color:var(--accent-hover); font-size:10.5px; padding:6px 12px; cursor:pointer;
+    transition:transform var(--t-press) var(--spring), border-color .15s ease;
+  }
+  .eq-srow button:active { transform:scale(.96); }
+  .eq-row.flash { animation:eqFlash 1.2s ease; }
+  @keyframes eqFlash { 0%,55% { background:rgba(236,65,65,.16); border-color:rgba(236,65,65,.5); } }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
    * 外层容器观感对齐主列表(.panel):同圆角(--r-md)、同底色透明度(--glass-regular);
@@ -2971,7 +2990,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   <div class="quick-bar" id="quickBar">
     <button type="button" data-fn="A">登录</button>
     <button type="button" data-fn="B">歌单</button>
-    <button type="button" data-fn="C">EQ</button>
+    <button type="button" data-fn="C">音效</button>
     <button type="button" data-fn="D">D</button>
     <button type="button" data-fn="E">E</button>
   </div>
@@ -3011,7 +3030,11 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 <div class="modal-mask" id="eqModal">
   <div class="modal-box eqbox">
     <button class="modal-x" onclick="closeEqModal()" title="关闭">○</button>
-    <div class="modal-title">音效 · EQ (内置)</div>
+    <div class="modal-title">音效 · EQ (内置300+)</div>
+    <div class="eq-srow">
+      <input id="eqSearch" type="text" placeholder="搜索预设名或序号…" oninput="filterEqList(this.value)">
+      <button type="button" onclick="findEqFirst()">查找</button>
+    </div>
     <div class="eq-list" id="eqList"></div>
   </div>
 </div>
@@ -4415,12 +4438,32 @@ async function applyEq(name) {
   toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
 }
 let EQ_ORDER = [];
-function renderEqList() {                  // 内置13套+导入PowerAMP预设合并渲染;索引派发避免名称转义问题
+function renderEqList() {                  // 内置13套+导入PowerAMP预设合并渲染;索引派发避免名称转义问题;带序号方便定位
   EQ_ORDER = Object.keys(EQ_PRESETS).concat(Object.keys(EQ_IMPORTED));
   $('eqList').innerHTML = EQ_ORDER.map((k, i) => {
     return `<div class="eq-row${k === eqActiveName ? ' on' : ''}" onclick="applyEqIdx(${i})">`
-      + `<span class="eq-name">${esc(eqDisplay(k))}</span><span class="eq-mark">㉿</span></div>`;
+      + `<span class="eq-num">${i + 1}.</span><span class="eq-name">${esc(eqDisplay(k))}</span><span class="eq-mark">㉿</span></div>`;
   }).join('');
+}
+function filterEqList(q) {                 /* 搜索过滤:按名称或序号匹配,空串恢复全部557行 */
+  q = (q || '').trim().toLowerCase();
+  const rows = $('eqList').children;
+  EQ_ORDER.forEach((k, i) => {
+    if (!rows[i]) return;
+    const hit = !q || eqDisplay(k).toLowerCase().indexOf(q) >= 0 || String(i + 1).indexOf(q.replace(/\D/g, '')) >= 0 && /\d/.test(q);
+    rows[i].style.display = hit ? '' : 'none';
+  });
+}
+function findEqFirst() {                   /* 跳到第一个匹配行并闪烁提示 */
+  const rows = $('eqList').children;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].style.display !== 'none') {
+      try { rows[i].scrollIntoView({ block: 'center' }); } catch (e) { }
+      rows[i].classList.add('flash');
+      setTimeout(() => rows[i].classList.remove('flash'), 1250);
+      return;
+    }
+  }
 }
 function applyEqIdx(i) { if (EQ_ORDER[i]) applyEq(EQ_ORDER[i]); }
 function openEqModal() {

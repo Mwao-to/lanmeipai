@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 79
-        versionName '3.65'   // EQ预设秒切零卡顿:applyEq不再重建557行DOM列表(markEqActive只切行高亮class);持久化250ms防抖(快速连点不反复同步写localStorage+eqw.json);滤波器参数setTargetAtTime平滑过渡(15ms时间常数)消除硬跳变咔哒声
+        versionCode 80
+        versionName '3.66'   // EQ弹窗:预设行加序号1~557方便定位;C键文本EQ改音效;标题改音效·EQ(内置300+);标题下新增透明搜索框+查找按钮同行布局(样式与eq-row同透明度同圆角,输入实时过滤名称/序号,查找跳到首个匹配行闪烁);播放器进度条圆点改translateY(-50%)+box-sizing几何精确居中(旧margin法偏下),时间标签line-height=条高与线对齐
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
