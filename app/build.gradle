@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 71
-        versionName '3.58'   // EQ弹窗:预设名称与㉿标记字号统一缩小0.5倍(15.5→7.75px);选中预设不再自动收起弹窗(移除applyEq内closeEqModal,便于连续试听切换,关闭走X/遮罩/Esc)
+        versionCode 72
+        versionName '3.59'   // 三次导入Presets400.json耳机校正曲线419条(63型号多变体):EQ_IMPORT_RAW400内置副本(881KB)+eqImport400()桥读兜底优先;EQ弹窗总预设557条(13内置+544导入)实时切换
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

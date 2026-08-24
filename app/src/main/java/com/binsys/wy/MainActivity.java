@@ -415,6 +415,26 @@ public class MainActivity extends Activity {
             }
         }
 
+        /** 读外部 Presets400.json(耳机校正曲线扩充419条);失败返回空串走内置副本 */
+        @JavascriptInterface
+        public String eqImport400() {
+            try {
+                java.io.File f = new java.io.File("/storage/emulated/0/e/Presets400.json");
+                if (!f.exists()) return "";
+                java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(f));
+                StringBuilder sb = new StringBuilder();
+                char[] buf = new char[8192];
+                int n;
+                while ((n = r.read(buf)) > 0) sb.append(buf, 0, n);
+                r.close();
+                Dbg.w(MainActivity.this, "[eq] Presets400.json 已读取 " + sb.length());
+                return sb.toString();
+            } catch (Throwable t) {
+                Dbg.w(MainActivity.this, "‼️ [eq] Presets400.json 读取失败(无存储权限时用内置副本)", t);
+                return "";
+            }
+        }
+
         /** 读外部 Presets100.json(耳机型号校正曲线100条);失败返回空串走内置副本 */
         @JavascriptInterface
         public String eqImport100() {
