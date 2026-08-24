@@ -1,0 +1,120 @@
+#!/usr/bin/env node
+/* v3.71 D键·自定义音源 测试桩:抽取 index.html 中 xsrc 区块,在桩环境下验证
+ * LX协议握手/静态分析/调用封装/非法脚本拒绝 等核心逻辑。 */
+const fs = require('fs');
+const path = require('path');
+const html = fs.readFileSync(path.join(__dirname, 'app/src/main/assets/index.html'), 'utf8');
+const START = html.indexOf('/* ═══ D键·自定义音源(LX洛雪协议适配');
+const END = html.indexOf('/* ═══ A键·扫码登录兜底') >= 0 ? html.indexOf('/* ═══ A键·扫码登录兜底') : html.indexOf('/* ═══ A键·扫码登录兑底');
+if (START < 0 || END < 0 || END <= START) { console.error('✗ 未找到xsrc区块标记'); process.exit(1); }
+const block = html.slice(START, END);
+
+/* ─── 桩环境 ─── */
+const els = {};
+const mkEl = id => els[id] || (els[id] = {
+  id, style: {}, dataset: {}, innerHTML: '', textContent: '',
+  classList: { add() { }, remove() { }, contains: () => false },
+  addEventListener() { }, isConnected: true,
+});
+['srcModal', 'srcListBox', 'srcEmpty', 'srcAddRow', 'srcScroll', 'vrfyModal', 'vrfyLog', 'vrfySum', 'vrfyName'].forEach(mkEl);
+global.window = global;
+global.document = { getElementById: id => els[id] || null, querySelector: () => null };
+global.localStorage = { _d: {}, getItem(k) { return k in this._d ? this._d[k] : null; }, setItem(k, v) { this._d[k] = String(v); }, removeItem(k) { delete this._d[k]; } };
+global.bridgeCall = () => undefined;
+global.toast = () => { };
+global.state = {};
+global.$ = id => global.document.getElementById(id);
+global.esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let apiCalls = [];
+global.api = url => { apiCalls.push(url); return Promise.resolve({ code: 200, status: 200, ctype: 'application/json', b64: false, body: '{"ok":1}' }); };
+
+eval(block);
+
+let pass = 0, fail = 0;
+const ok = (cond, msg) => { console.log((cond ? '  ✓ ' : '  ✗ ') + msg); cond ? pass++ : fail++; };
+(async () => {
+  console.log('[1] 头部元信息+静态适配分析');
+  const fakeSrc = `/**
+ * @name 星海音乐源 v2.3
+ * @description 聚合音源测试
+ * @version 2.3.13
+ * @author tester
+ */
+const { EVENT_NAMES, request, on, send } = globalThis.lx
+on(EVENT_NAMES.request, function ({ source, action, info }) {
+  if (action === 'musicUrl') return Promise.resolve('http://cdn.example/' + getSongId(info.musicInfo))
+  if (action === 'lyric') return Promise.resolve('[00:01.00]test')
+  if (action === 'pic') return Promise.resolve('http://img.example/pic.jpg')
+  return Promise.reject('not support')
+})
+send(EVENT_NAMES.inited, { sources: { wy: { name: '网易云', type: 'music', actions: ['musicUrl', 'lyric', 'pic'], qualitys: ['128k'] } } })
+function getSongId(m) { return m.songmid || m.id }`;
+  const info = analyzeXsrcCode(fakeSrc, 'fallback.js');
+  ok(info.name === '星海音乐源 v2.3', '@name解析: ' + info.name);
+  ok(info.version === '2.3.13' && info.author === 'tester', '版本/作者解析');
+  ok(info.protocolOk === true, '协议特征识别');
+  ok(info.actions.has('musicUrl') && info.actions.has('pic') && info.actions.has('lyric'), 'action静态扫描: ' + [...info.actions].join('/'));
+  ok(info.platforms.includes('wy'), '平台识别含wy');
+
+  console.log('[2] 协议握手(runXsrc非提交模式)');
+  global.window.lx = null;
+  const ctx = await runXsrc('星海.js', fakeSrc, false);
+  ok(ctx && !ctx.fail && typeof ctx.handler === 'function', 'inited握手成功拿到handler');
+  ok(ctx.actions.has('lyric') && ctx.actions.has('pic'), '清单actions: ' + [...ctx.actions].join('/'));
+
+  console.log('[3] 调用封装(xsrcCallOn)');
+  const u = await xsrcCallOn(ctx, 'musicUrl', { songmid: '5257138' }, '320k');
+  ok(u === 'http://cdn.example/5257138', 'musicUrl返回直链: ' + u);
+  let threw = '';
+  try { await xsrcCallOn(null, 'musicUrl', {}); } catch (e) { threw = e.message; }
+  ok(threw === '音源不可用', '空ctx拒绝: ' + threw);
+
+  console.log('[4] 非洛雪脚本拒绝');
+  const bad1 = await runXsrc('bad.js', 'var x = 1;', false);
+  ok(bad1 && bad1.fail && /inited/.test(bad1.fail), '无inited拒绝: ' + (bad1 && bad1.fail));
+  const bad2 = await runXsrc('bad2.js', 'var lx = globalThis.lx; lx.on(lx.EVENT_NAMES.alert, () => {});', false);
+  ok(bad2 && bad2.fail && /处理器|inited/.test(bad2.fail), '未注册request处理器拒绝: ' + (bad2 && bad2.fail));
+  const bad3 = await runXsrc('bad3.js', 'throw new Error("boom")', false);
+  ok(bad3 && bad3.fail && /boom/.test(bad3.fail), '执行异常捕获: ' + (bad3 && bad3.fail));
+
+  console.log('[5] 垫片request走/api/xhttp代理(b64头编码往返)');
+  let captured = null;
+  global.api = url => { captured = url; return Promise.resolve({ code: 200, status: 200, ctype: 'application/json', b64: false, body: JSON.stringify({ code: 0, msg: 'x' }) }); };
+  const shim = buildLxShim();
+  await new Promise(res => shim.request('https://api.test/x?a=1&b=中文', { method: 'post', headers: { 'Cookie': 'a=b' }, body: 'p=1' }, (err, resp) => {
+    ok(!err && resp.statusCode === 200 && resp.body === '{"code":0,"msg":"x"}', '代理响应回传: ' + resp.body);
+    res();
+  }));
+  ok(captured.startsWith('/api/xhttp?url=https%3A%2F%2Fapi.test%2Fx'), 'URL已编码: ' + captured.slice(0, 46) + '…');
+  ok(captured.includes('&method=post'), 'method透传');
+  const hd = JSON.parse(Buffer.from(decodeURIComponent(captured.split('&headers=')[1]), 'base64').toString());
+  ok(hd.Cookie === 'a=b', 'headers b64编解码往返: ' + JSON.stringify(hd));
+
+  console.log('[6] 全局开关状态机');
+  ok(xsrcActive() === false, '初始未启用');
+  const okLoad = await loadXsrc('星海.js', fakeSrc, true);
+  ok(okLoad === true && xsrcActive() === true && localStorage.getItem('xsrc_active') === '星海.js', '启用后持久化');
+  stopXsrc(true);
+  ok(xsrcActive() === false && localStorage.getItem('xsrc_active') === null, '停用后恢复三通道');
+
+  console.log('[7] 启用自检(autoCheckXsrc)标记可用/失效');
+  const toasts7 = [];
+  global.toast = m => { toasts7.push(String(m)); };
+  await loadXsrc('星海.js', fakeSrc, true);
+  let t7 = Date.now();
+  while (!toasts7.some(t => t.includes('音源自检完成')) && Date.now() - t7 < 3000) await new Promise(r => setTimeout(r, 20));
+  const goodMsg = toasts7.filter(t => t.includes('音源自检完成')).pop() || '';
+  ok(/歌曲链接 ✓/.test(goodMsg) && /歌词 ✓/.test(goodMsg) && /图片 ✓/.test(goodMsg), '全接口可用: ' + goodMsg);
+  toasts7.length = 0;
+  const deadSrc = fakeSrc.replace("return Promise.resolve('[00:01.00]test')", "return Promise.resolve('')");
+  await loadXsrc('dead.js', deadSrc, true);
+  t7 = Date.now();
+  while (!toasts7.some(t => t.includes('音源自检完成')) && Date.now() - t7 < 3000) await new Promise(r => setTimeout(r, 20));
+  const badMsg = toasts7.filter(t => t.includes('音源自检完成')).pop() || '';
+  ok(/歌词 ✗失效/.test(badMsg) && /歌曲链接 ✓/.test(badMsg), '空歌词判定失效: ' + badMsg);
+  stopXsrc(true);
+  global.toast = () => { };
+
+  console.log(`\n═══ 结果: ${pass} 通过, ${fail} 失败 ═══`);
+  process.exit(fail ? 1 : 0);
+})().catch(e => { console.error('✗ 桩异常:', e); process.exit(1); });

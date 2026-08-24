@@ -734,11 +734,11 @@
       <div id="srcListBox"></div>
       <div class="src-empty" id="srcEmpty">
         <div class="src-empty-txt">尚未配置任何音源文件</div>
-        <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入</button>
+        <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">从本地文件导入</button>
         <div class="src-empty-sub">支持洛雪(LX)协议音源.JS</div>
       </div>
       <div class="src-addrow" id="srcAddRow">
-        <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入</button>
+        <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">从本地文件导入</button>
       </div>
     </div>
   </div>
@@ -1165,6 +1165,7 @@ async function loadXsrc(fileName, code, silent) {
   const ctx = await runXsrc(fileName, code, true);
   if (!ctx) { localStorage.removeItem('xsrc_active'); if (!silent) toast('音源加载失败，已保持内置策略', 'error', 3000); return false; }
   if (!silent) toast('音源「' + ctx.name + '」已全局接管（歌曲/歌词/图片/下载）', 'success', 3200);
+  autoCheckXsrc(ctx);                          /* v3.79:启用后自动自检各接口可用性(异步不打断) */
   return true;
 }
 function stopXsrc(quiet) {
@@ -1197,6 +1198,39 @@ function xsrcCallOn(ctx, action, song, quality) { /* 固定wy平台(本App曲库
   ]);
 }
 function xsrcCall(action, song, quality) { return xsrcCallOn(xsrcHandler, action, song, quality); }
+/* 启用即自检(v3.79):逐接口探活一次标记可用/失效;失效接口播放期直接跳过不重试,可用接口保留重试策略 */
+const xsrcBadToasted = {};                     // 失效提醒去重(每源每接口只提醒一次)
+function notifyBadOnce(kind) {
+  const key = (xsrcHandler ? xsrcHandler.file : '') + ':' + kind;
+  if (xsrcBadToasted[key]) return;
+  xsrcBadToasted[key] = true;
+  const label = kind === 'lyric' ? '歌词' : '图片';
+  toast('音源「' + (xsrcHandler ? xsrcHandler.name : '') + '」的' + label + '接口已失效，已跳过（不影响歌曲播放）', 'warn', 3400);
+}
+async function autoCheckXsrc(ctx) {
+  const probe = { songmid: '5257138', name: '屋顶', singer: '周杰伦' };
+  const res = {};
+  const test = async (action, fn, isUrl) => {
+    try {
+      const v = await Promise.race([fn(), new Promise((_, rej) => setTimeout(() => rej(new Error('超时')), 9000))]);
+      const s = typeof v === 'string' ? v : String((v && v.lyric) || '');
+      if (!s.trim()) throw new Error('空');
+      if (isUrl && !/^https?:\/\//i.test(s)) throw new Error('非直链');
+      res[action] = true;
+    } catch (e) { res[action] = false; }
+  };
+  await test('musicUrl', () => xsrcCallOn(ctx, 'musicUrl', probe, '128k'), true);
+  if (ctx.actions.has('lyric')) await test('lyric', () => xsrcCallOn(ctx, 'lyric', probe), false);
+  if (ctx.actions.has('pic')) await test('pic', () => xsrcCallOn(ctx, 'pic', probe, '128k'), true);
+  if (xsrcHandler !== ctx) return;             // 已切别的源,结果作废
+  ctx.ok = res;                                // 播放期据此决定跳过或重试
+  const parts = [];
+  if (res.musicUrl !== undefined) parts.push('歌曲链接 ' + (res.musicUrl ? '✓' : '✗'));
+  if (res.lyric !== undefined) parts.push('歌词 ' + (res.lyric ? '✓' : '✗失效'));
+  if (res.pic !== undefined) parts.push('图片 ' + (res.pic ? '✓' : '✗失效'));
+  const anyBad = Object.values(res).some(v => !v);
+  toast('音源自检完成：' + parts.join(' / ') + (anyBad ? '（失效接口播放时自动跳过）' : ''), anyBad ? 'warn' : 'success', 3800);
+}
 /* 导入后适配检查:静默试跑→失败自动清理私有副本,成功提示能力清单 */
 async function adaptCheckXsrc(fileName) {
   const code = bridgeCall('srcRead', fileName) || '';
@@ -2095,11 +2129,14 @@ async function play(i, list) {
     maybeAutoBuildEq();                    // 启动遗留的自动预设在此建链填参
     audio.src = r.data.url;
     audio.play().catch(() => { });   // 自动播放被拦截时静默,用户手动点击播放即可
-    if (r.data.via === 'xsrc' && xsrcHandler.actions.has('pic')) {                        /* v3.71:封面也交音源(未声明则保留曲库图) */
-      xsrcCall('pic', song, '128k').then(u => {
-        const s2 = String(u);
-        if (seq === playSeq && /^https?:\/\//i.test(s2)) setBgCover(s2);
-      }).catch(() => { });
+    if (r.data.via === 'xsrc' && xsrcHandler.actions.has('pic')) {                       /* v3.79:封面交音源;自检失效→跳过+提醒一次,可用/未检→尝试(失败静默不重试) */
+      if (xsrcHandler.ok && xsrcHandler.ok.pic === false) notifyBadOnce('pic');
+      else {
+        xsrcCall('pic', song, '128k').then(u => {
+          const s2 = String(u);
+          if (seq === playSeq && /^https?:\/\//i.test(s2)) setBgCover(s2);
+        }).catch(() => { });
+      }
     } else if (r.data.via === 'toubiec') toast(`已通过VIP通道播放「${song.name}」`, 'warn', 3000);
   } catch (e) {
     if (seq !== playSeq) return;
@@ -2724,11 +2761,15 @@ async function loadLyric(song, seq) {
   let r = null;
   for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
     try {
-      r = (xsrcActive() && xsrcHandler.actions.has('lyric'))
-        ? await withTimeout(xsrcCall('lyric', song).then(t => ({                        /* v3.71:音源接管歌词(LX返回串或{lyric,tlyric})归一化 */
-          code: 200, data: { lyric: typeof t === 'string' ? t : String((t && t.lyric) || '') }
-        })), URL_TIMEOUT_MS)
-        : await withTimeout(api(`/api/lyric?songmid=${encodeURIComponent(songKey)}`), URL_TIMEOUT_MS);
+      if (xsrcActive() && xsrcHandler.ok && xsrcHandler.ok.lyric === false) {
+        notifyBadOnce('lyric');                                                /* v3.79:自检判定失效→直接跳过不请求不重试 */
+        r = { code: 404, data: {} };
+      }
+      else if (!(xsrcActive() && xsrcHandler.actions.has('lyric'))) r = null;   // 未声明→走内置曲库歌词
+      else r = await withTimeout(xsrcCall('lyric', song).then(t => ({                        /* v3.71:音源接管歌词(LX返回串或{lyric,tlyric})归一化 */
+        code: 200, data: { lyric: typeof t === 'string' ? t : String((t && t.lyric) || '') }
+      })), URL_TIMEOUT_MS);
+      if (!r) r = await withTimeout(api(`/api/lyric?songmid=${encodeURIComponent(songKey)}`), URL_TIMEOUT_MS);
       if (!state.song || state.song.songmid !== songKey) return; // 切歌竞态保护
       if (seq !== undefined && seq !== playSeq) return;          // 双保险:过期响应丢弃
       break;   // 收到业务响应(含暂无歌词):不再重试
