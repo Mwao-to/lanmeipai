@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 97
-        versionName '3.83'   // ①D按钮去文字化:替换为SVG图标(17×17/stroke2/圆角线帽,与A登录/B歌单/C音效同规格)——文件折角轮廓+内嵌音符,呼音源.js文件意境
+        versionCode 98
+        versionName '3.84'   // ①歌词失效兑底策略重构:歌词接口失效但歌曲可播→静默回退网易云官方歌词接口(/api/lyric,享受既有4s×3重试),不对用户提示任何兑底动作;整源不可用(musicUrl也失效)→不兑底静默跳过;移除原播放期'歌词接口已失效'一次性提醒(避免与成功显示的官方歌词矛盾)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

@@ -5161,14 +5161,19 @@ async function loadLyric(song, seq) {
   let r = null;
   for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
     try {
-      if (xsrcActive() && xsrcHandler.ok && xsrcHandler.ok.lyric === false) {
-        notifyBadOnce('lyric');                                                /* v3.79:自检判定失效→直接跳过不请求不重试 */
-        r = { code: 404, data: {}, xsrcSkip: true };                           /* v3.80:带跳过标记,下游不再误报'暂无歌词' */
+      const srcL = xsrcActive() ? xsrcHandler : null;
+      const lyricDead = !!(srcL && srcL.ok && srcL.ok.lyric === false);
+      const wholeDead = lyricDead && srcL.ok.musicUrl === false;
+      const useSrcLyric = !!(srcL && srcL.actions.has('lyric') && !lyricDead);
+      if (wholeDead) {
+        r = { code: 404, data: {}, xsrcSkip: true };           /* v3.84:整源不可用(歌都播不了)→不兑底,静默跳过 */
+      } else if (useSrcLyric) {
+        r = await withTimeout(xsrcCall('lyric', song).then(t => ({                        /* v3.71:音源接管歌词(LX返回串或{lyric,tlyric})归一化 */
+          code: 200, data: { lyric: typeof t === 'string' ? t : String((t && t.lyric) || '') }
+        })), URL_TIMEOUT_MS);
+      } else {
+        r = null;                                              /* v3.84:歌词失效但歌曲可播→静默兑底官方歌词(享受既有重试策略),不对用户提示兑底 */
       }
-      else if (!(xsrcActive() && xsrcHandler.actions.has('lyric'))) r = null;   // 未声明→走内置曲库歌词
-      else r = await withTimeout(xsrcCall('lyric', song).then(t => ({                        /* v3.71:音源接管歌词(LX返回串或{lyric,tlyric})归一化 */
-        code: 200, data: { lyric: typeof t === 'string' ? t : String((t && t.lyric) || '') }
-      })), URL_TIMEOUT_MS);
       if (!r) r = await withTimeout(api(`/api/lyric?songmid=${encodeURIComponent(songKey)}`), URL_TIMEOUT_MS);
       if (!state.song || state.song.songmid !== songKey) return; // 切歌竞态保护
       if (seq !== undefined && seq !== playSeq) return;          // 双保险:过期响应丢弃

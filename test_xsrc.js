@@ -128,6 +128,10 @@ function getSongId(m) { return m.songmid || m.id }`;
   stopXsrc(true);
   global.toast = () => { };
 
+  console.log('[9] 歌词失效静默兑底官方(仅当歌曲可播)');
+  ok(/wholeDead[^\n]*\n[\s\S]{0,160}xsrcSkip: true/.test(html), '整源不可用→不兑底静默跳过分支存在');
+  ok(/useSrcLyric/.test(html) && /歌词失效但歌曲可播→静默兑底官方歌词/.test(html), '失效但可播→兑底官方分支存在');
+
   console.log(`\n═══ 结果: ${pass} 通过, ${fail} 失败 ═══`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('✗ 桩异常:', e); process.exit(1); });
