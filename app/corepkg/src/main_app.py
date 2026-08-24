@@ -2649,15 +2649,20 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
   .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:10.1px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
   .eq-row.on .eq-mark { color:var(--accent-hover); }
-  /* 手动十段滑杆面板(ISO 31Hz~16k) */
-  .eq-man { display:none; margin-top:10px; padding:8px; border:1px solid var(--glass-border);
-    border-radius:var(--r-md); background:rgba(255,255,255,.04); }
+  /* 手动十段:两行×5根竖向滑杆(中线0dB原点,圆点拇指,双向进度填充) */
+  .eq-man { display:none; margin-top:10px; padding:8px 6px; border:1px solid var(--glass-border);
+    border-radius:var(--r-md); background:rgba(255,255,255,.04); box-sizing:border-box; }
   .eq-man.on { display:block; }
-  .eq-mrow { display:flex; align-items:center; gap:7px; margin-bottom:5px; }
-  .eq-mrow:last-child { margin-bottom:0; }
-  .eq-mlab { flex:0 0 48px; font-family:var(--mono); font-size:9px; color:var(--muted); }
-  .eq-mval { flex:0 0 42px; text-align:right; font-family:var(--mono); font-size:9px; color:var(--accent-hover); }
-  .eq-man input[type=range] { flex:1; min-width:0; accent-color:var(--accent-hover); height:14px; margin:0; }
+  .eq-vrow { display:flex; justify-content:space-between; margin-bottom:8px; }
+  .eq-vrow:last-child { margin-bottom:0; }
+  .eq-vcol { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; min-width:0; }
+  .eq-mval { font-family:var(--mono); font-size:8.5px; color:var(--accent-hover); line-height:1; }
+  .eq-vtrack { position:relative; width:20px; height:86px; border-radius:10px;
+    background:rgba(255,255,255,.09); overflow:hidden; cursor:pointer; touch-action:none; }
+  .eq-vfill { position:absolute; left:5px; right:5px; background:rgba(236,65,65,.6); border-radius:4px; }
+  .eq-vthumb { position:absolute; left:50%; transform:translate(-50%,-50%); width:14px; height:14px;
+    border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.45); pointer-events:none; }
+  .eq-vlab { font-family:var(--mono); font-size:8.5px; color:var(--muted); line-height:1; }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
    * 外层容器观感对齐主列表(.panel):同圆角(--r-md)、同底色透明度(--glass-regular);
@@ -4319,18 +4324,49 @@ async function applyManualEq() {
   renderEqList();
   toast('已应用EQ：手动十段', 'success');
 }
-function renderManualPanel() {             // 十段滑杆面板(-6~+6dB步进1,拖动实时生效)
-  $('eqMan').innerHTML = MANUAL_BANDS.map((f, i) => {
-    const lab = f >= 1000 ? (f / 1000) + 'k' : '' + f;
-    return `<div class="eq-mrow"><span class="eq-mlab">${lab}Hz</span>`
-      + `<input type="range" min="-6" max="6" step="1" value="${EQ_MANUAL[i]}" oninput="setManualBand(${i}, this.value)">`
-      + `<span class="eq-mval" id="eqMv${i}">${EQ_MANUAL[i] > 0 ? '+' : ''}${EQ_MANUAL[i]}dB</span></div>`;
-  }).join('');
+function paintManualBand(i) {              // 按EQ_MANUAL[i]重画竖条:中线起双向进度填充+圆点位置
+  const col = document.getElementById('eqVc' + i);
+  if (!col) return;
+  const p = EQ_MANUAL[i] / 6;              // -1..1
+  const fill = col.querySelector('.eq-vfill'), th = col.querySelector('.eq-vthumb');
+  if (fill) {
+    if (p >= 0) { fill.style.top = (50 - p * 50) + '%'; fill.style.height = (p * 50) + '%'; }
+    else { fill.style.top = '50%'; fill.style.height = (-p * 50) + '%'; }
+  }
+  if (th) th.style.top = (50 - p * 50) + '%';
+  const v = col.querySelector('.eq-mval');
+  if (v) v.textContent = (EQ_MANUAL[i] > 0 ? '+' : '') + EQ_MANUAL[i];
 }
-function setManualBand(i, v) {             // 拖动实时改对应单节增益(选中态下)
-  EQ_MANUAL[i] = Math.max(-6, Math.min(6, Number(v) || 0));
-  const el = $('eqMv' + i); if (el) el.textContent = (EQ_MANUAL[i] > 0 ? '+' : '') + EQ_MANUAL[i] + 'dB';
+function setManualBand(i, db) {            // 拖动实时改对应单节增益(选中态下)
+  EQ_MANUAL[i] = Math.max(-6, Math.min(6, Math.round(Number(db) || 0)));
+  paintManualBand(i);
   if (eqActiveName === '手动十段' && eqFilters && eqFilters[i]) eqFilters[i].gain.value = clampDb(EQ_MANUAL[i]);
+}
+function renderManualPanel() {             // 两行×5根竖向圆点滑杆:上行31~500Hz,下行1k~16k;触点位置直接换算dB
+  const mk = (f, i) => {
+    const lab = f >= 1000 ? (f / 1000) + 'k' : '' + f;
+    return `<div class="eq-vcol" id="eqVc${i}">`
+      + `<span class="eq-mval">${EQ_MANUAL[i] > 0 ? '+' : ''}${EQ_MANUAL[i]}</span>`
+      + `<div class="eq-vtrack"><i class="eq-vfill"></i><b class="eq-vthumb"></b></div>`
+      + `<span class="eq-vlab">${lab}</span></div>`;
+  };
+  $('eqMan').innerHTML =
+    '<div class="eq-vrow">' + MANUAL_BANDS.slice(0, 5).map((f, j) => mk(f, j)).join('') + '</div>'
+    + '<div class="eq-vrow">' + MANUAL_BANDS.slice(5).map((f, j) => mk(f, j + 5)).join('') + '</div>';
+  MANUAL_BANDS.forEach((f, i) => {
+    const tr = document.querySelector('#eqVc' + i + ' .eq-vtrack');
+    if (!tr) return;
+    const upd = y => {
+      const r = tr.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, 1 - (y - r.top) / r.height));   // 顶=+1 底=-1
+      setManualBand(i, Math.round((ratio - 0.5) * 12));                     // 映射±6dB
+    };
+    tr.addEventListener('touchstart', e => upd(e.touches[0].clientY), { passive: true });
+    tr.addEventListener('touchmove', e => upd(e.touches[0].clientY), { passive: true });
+    tr.addEventListener('mousedown', e => upd(e.clientY));
+    tr.addEventListener('mousemove', e => { if (e.buttons) upd(e.clientY); });
+  });
+  for (let i = 0; i < MANUAL_BANDS.length; i++) paintManualBand(i);
 }
 function openManualUi() {                  // 点击「手动十段」行:展开滑杆面板并按当前值生效
   renderManualPanel();
