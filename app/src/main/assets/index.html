@@ -283,7 +283,7 @@
   .eq-list {                               /* 关键修复:align-self:stretch强制撑满弹窗宽度(父容器为居中flex,否则子元素收缩成窄列) */
     margin-top:12px; align-self:stretch;
     margin-left:-15px; margin-right:-15px;
-    max-height:56vh; overflow-y:auto; overflow-x:hidden;
+    max-height:282px; overflow-y:auto; overflow-x:hidden;   /* 锁定首屏恰好8行(行高≈30+间隔6),其余557-8条下滑查看 */
     overscroll-behavior:contain; scrollbar-width:none;
   }
   .eq-list::-webkit-scrollbar { width:0; height:0; display:none; }
@@ -298,11 +298,11 @@
   .eq-row:active { transform:scale(.98); background:rgba(194,12,12,.08); }
   .eq-row.on { background:rgba(194,12,12,.08); border-color:rgba(236,65,65,.35); }
   .eq-name {                               /* 字号全预设统一(10.5px基础上再放大0.5倍) */
-    font-family:var(--mono); font-size:7.75px; color:var(--text-bright);   /* 15.5px统一缩小0.5倍 */
+    font-family:var(--mono); font-size:10.1px; color:var(--text-bright);   /* 7.75px统一增大0.3倍 */   /* 15.5px统一缩小0.5倍 */
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
-  .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:7.75px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
+  .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:10.1px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
   .eq-row.on .eq-mark { color:var(--accent-hover); }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
