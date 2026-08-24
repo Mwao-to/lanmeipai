@@ -349,15 +349,14 @@
   }
   @media (hover:hover) { .quick-bar button:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
   .quick-bar button svg { display:block; margin:0 auto; }   /* v3.70:A/B/C改SVG图标按钮,直读意境 */
-  /* ═══ D键·自定义音源弹窗(v3.73):弹窗自身限高,列表在剩余空间内滚动永不外溢;全字号统一10px ═══ */
-  .srcbox { width:min(92vw,560px); max-height:min(76vh,620px); display:flex; flex-direction:column; }
-  .src-foot2 { display:none; justify-content:flex-end; flex-shrink:0; margin-top:10px; }
-  .src-import-sm { width:auto; margin:0; padding:8px 14px; font-size:10px; }
-  .src-listbox { flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; flex-direction:column; gap:7px; scrollbar-width:none; contain:paint; }
-  .src-listbox::-webkit-scrollbar { display:none; }          /* 去拖动条 */
-  .src-item { position:relative; box-sizing:border-box; height:56px; flex-shrink:0; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:var(--glass-thin); border:1px solid var(--glass-border); }
+  /* ═══ D键·自定义音源弹窗(v3.74):完全对齐歌单弹窗机制——弹窗本体不限高,内容装进.qr-scroll(≤56vh)滚动;全字号10px ═══ */
+  #srcModal .modal-box { width:min(360px,90vw); }        /* 同#mvModal加宽手法,布局逻辑与歌单弹窗一致 */
+  .src-foot2 { display:none; justify-content:flex-end; flex-shrink:0; margin-top:8px; }
+  .src-import-sm { width:auto; margin:0; padding:7px 13px; font-size:10px; border-radius:var(--r-md); }
+  /* 列表自身不滚动(qr-scroll统一负责),条目用pl-item同款margin-bottom间隔 */
+  .src-item { position:relative; box-sizing:border-box; width:100%; height:56px; margin-bottom:7px; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:rgba(255,255,255,.04); border:1px solid var(--glass-border); cursor:default; text-align:left; }
   .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }   /* 仅变色不改尺寸 */
-  .src-namebox { margin-right:96px; }                         /* 给右上角[校验][删除]让位 */
+  .src-namebox { margin-right:96px; }                        /* 给右上角[校验][删除]让位 */
   .src-metabox { margin-top:3px; }
   .src-mq { overflow:hidden; white-space:nowrap; }
   .src-mq > span { display:inline-block; will-change:transform; }
@@ -372,7 +371,7 @@
   .switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
   .switch.on { background:rgba(236,65,65,.55); }
   .switch.on::after { transform:translateX(16px); background:#fff; }
-  .src-empty { text-align:center; padding:30px 0 24px; display:none; }
+  .src-empty { text-align:center; padding:26px 0 22px; display:none; }
   .src-empty-txt { font-size:10px; color:var(--muted); margin-bottom:14px; }
   .src-empty-sub { font-size:10px; color:var(--muted); opacity:.7; margin-top:10px; }
   /* 校验进行/报告弹窗(v3.72):实时日志+完成汇总,随时可关闭返回管理列表 */
@@ -730,19 +729,21 @@
   </div>
 </div>
 
-<!-- ═══ D键·自定义音源管理弹窗(v3.72):空态居中导入;有文件后策略行左字右下角小导入钮,行卡片统一高度 ═══ -->
+<!-- ═══ D键·自定义音源管理弹窗(v3.74):结构同歌单弹窗(modal-box+qr-scroll单一滚动容器),空态居中导入;有文件后列表滚动+底部右对齐导入钮 ═══ -->
 <div class="modal-mask" id="srcModal">
-  <div class="modal-box srcbox">
+  <div class="modal-box">
     <button class="modal-x" onclick="closeSrcModal()" title="关闭">○</button>
     <div class="modal-title">音源 · 自定义第三方源</div>
-    <div class="src-listbox" id="srcListBox"></div>
-    <div class="src-empty" id="srcEmpty">
-      <div class="src-empty-txt">尚未配置任何音源文件</div>
-      <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入自定义第三方音源</button>
-      <div class="src-empty-sub">支持洛雪(LX)协议音源脚本 · 存于应用私有目录 · 卸载即清</div>
+    <div class="qr-scroll" id="srcScroll">
+      <div id="srcListBox"></div>
+      <div class="src-empty" id="srcEmpty">
+        <div class="src-empty-txt">尚未配置任何音源文件</div>
+        <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入自定义第三方音源</button>
+        <div class="src-empty-sub">支持洛雪(LX)协议音源脚本 · 存于应用私有目录 · 卸载即清</div>
+      </div>
     </div>
     <div class="src-foot2" id="srcFoot2">
-      <button class="modal-btn secondary src-import-sm" onclick="srcPickImport()">导入音源文件</button>
+      <button class="src-btn src-import-sm" onclick="srcPickImport()">导入音源文件</button>
     </div>
   </div>
 </div>
@@ -1327,8 +1328,8 @@ function renderSrcList() {
   const box = $('srcListBox'), empty = $('srcEmpty'), foot2 = $('srcFoot2');
   if (!box) return;
   empty.style.display = files.length ? 'none' : 'block';
-  if (foot2) foot2.style.display = files.length ? 'flex' : 'none';   /* 有文件才显示右下角导入钮 */
-  box.style.display = files.length ? 'flex' : 'none';
+  if (foot2) foot2.style.display = files.length ? 'flex' : 'none';   /* 有文件才显示底部导入钮 */
+  box.style.display = files.length ? 'block' : 'none';               /* 滚动由外层qr-scroll统一负责(同歌单) */
   updateXsrcTip();
   box.innerHTML = files.map(f => {
     const act = xsrcHandler && xsrcHandler.file === f.name;
