@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 88
-        versionName '3.74'   // ①D弹窗完全对齐歌单(B键)弹窗机制:去掉自研flex限高(.srcbox删除),弹窗用原生.modal-box,列表+空态装进单一.qr-scroll(max-height:56vh;overflow-y:auto)滚动容器——与歌单搜索结果列表同源同保证,文件再多只在qr-scroll内滚动不破框②条目改pl-item同款margin-bottom间隔③宽度按#mvModal先例加宽至min(360px,90vw)
+        versionCode 89
+        versionName '3.75'   // ①行卡片56→71px+开关下移,与右上删除钮拉开≥15px视觉间距②删除确认弹窗:文案改'确认删除音源文件？数据将会完全移除'+文件名,左确认右取消互换,消息/按钮字号对齐D弹窗10px,按钮white-space:nowrap禁换行③去掉底部固定'导入音源文件'小钮,列表尾部迁移初始页同款居中'导入自定义第三方音源'大钮(src-addrow,有文件时显示)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

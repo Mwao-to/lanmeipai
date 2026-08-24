@@ -351,10 +351,8 @@
   .quick-bar button svg { display:block; margin:0 auto; }   /* v3.70:A/B/C改SVG图标按钮,直读意境 */
   /* ═══ D键·自定义音源弹窗(v3.74):完全对齐歌单弹窗机制——弹窗本体不限高,内容装进.qr-scroll(≤56vh)滚动;全字号10px ═══ */
   #srcModal .modal-box { width:min(360px,90vw); }        /* 同#mvModal加宽手法,布局逻辑与歌单弹窗一致 */
-  .src-foot2 { display:none; justify-content:flex-end; flex-shrink:0; margin-top:8px; }
-  .src-import-sm { width:auto; margin:0; padding:7px 13px; font-size:10px; border-radius:var(--r-md); }
   /* 列表自身不滚动(qr-scroll统一负责),条目用pl-item同款margin-bottom间隔 */
-  .src-item { position:relative; box-sizing:border-box; width:100%; height:56px; margin-bottom:7px; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:rgba(255,255,255,.04); border:1px solid var(--glass-border); cursor:default; text-align:left; }
+  .src-item { position:relative; box-sizing:border-box; width:100%; height:71px; margin-bottom:7px; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:rgba(255,255,255,.04); border:1px solid var(--glass-border); cursor:default; text-align:left; }   /* v3.75:56→71px,适配开关下移后内部呼吸空间 */
   .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }   /* 仅变色不改尺寸 */
   .src-namebox { margin-right:96px; }                        /* 给右上角[校验][删除]让位 */
   .src-metabox { margin-top:3px; }
@@ -367,7 +365,7 @@
   .src-topbtns { position:absolute; top:5px; right:6px; display:flex; gap:5px; }
   .src-btn { flex-shrink:0; font-size:10px; padding:2px 8px; border-radius:7px; border:1px solid var(--glass-border); background:rgba(255,255,255,.06); color:var(--text-bright); cursor:pointer; font-family:var(--mono); line-height:1.5; transition:border-color .15s ease; }
   .src-btn.del { color:#ff7b72; }
-  .switch { position:absolute; right:9px; top:calc(50% + 10px); transform:translateY(-50%); width:38px; height:20px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }
+  .switch { position:absolute; right:9px; top:calc(50% + 8px); transform:translateY(-50%); width:38px; height:20px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }   /* v3.75:行高加大后开关下移,与右上删除钮拉开≥15px视觉间距 */
   .switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
   .switch.on { background:rgba(236,65,65,.55); }
   .switch.on::after { transform:translateX(16px); background:#fff; }
@@ -384,9 +382,11 @@
   .vrfy-sum { margin-top:10px; font-size:12px; font-family:var(--mono); line-height:1.7; }
   /* 通用确认弹窗(v3.72):确认/取消双选 */
   .cfmbox { width:min(82vw,360px); }
-  .cfm-msg { font-size:12px; color:var(--muted); line-height:1.7; margin:12px 0 18px; word-break:break-all; white-space:pre-line; }
+  .src-addrow { display:none; text-align:center; padding:6px 0 2px; }
+  /* 确认弹窗(v3.75):字号对齐D弹窗10px,按钮文本禁止换行 */
+  .cfm-msg { font-size:10px; color:var(--muted); line-height:1.7; margin:12px 0 16px; word-break:break-all; white-space:pre-line; }
   .cfm-btns { display:flex; gap:10px; }
-  .cfm-btns .modal-btn { flex:1; width:auto; margin:0; padding:10px 0; }
+  .cfm-btns .modal-btn { flex:1; width:auto; margin:0; padding:10px 0; max-width:none; font-size:10px; white-space:nowrap; }
   .quick-bar button:active { transform:scale(.9); }   /* 弹性按压,与全站一致 */
 
   /* ═══ A键·扫码登录弹窗(布局同下载弹窗,内容专属) ═══ */
@@ -741,9 +741,9 @@
         <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入自定义第三方音源</button>
         <div class="src-empty-sub">支持洛雪(LX)协议音源脚本 · 存于应用私有目录 · 卸载即清</div>
       </div>
-    </div>
-    <div class="src-foot2" id="srcFoot2">
-      <button class="src-btn src-import-sm" onclick="srcPickImport()">导入音源文件</button>
+      <div class="src-addrow" id="srcAddRow">
+        <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入自定义第三方音源</button>
+      </div>
     </div>
   </div>
 </div>
@@ -759,14 +759,14 @@
   </div>
 </div>
 
-<!-- ═══ 通用确认弹窗(v3.72):确认/取消双选(替代两段式按钮) ═══ -->
+<!-- ═══ 通用确认弹窗(v3.75):左确认右取消,字号对齐D弹窗,单行按钮 ═══ -->
 <div class="modal-mask" id="cfmModal">
   <div class="modal-box cfmbox">
     <div class="modal-title" id="cfmTitle">确认操作</div>
     <div class="cfm-msg" id="cfmMsg"></div>
     <div class="cfm-btns">
+      <button class="modal-btn" onclick="closeCfm(true)">确认</button>
       <button class="modal-btn secondary" onclick="closeCfm(false)">取消</button>
-      <button class="modal-btn" style="background:rgba(236,65,65,.78)" onclick="closeCfm(true)">确认删除</button>
     </div>
   </div>
 </div>
@@ -1210,7 +1210,7 @@ function closeCfm(yes) {
 $('cfmModal').addEventListener('click', e => { if (e.target.id === 'cfmModal') closeCfm(false); });
 function deleteXsrc(fileName) {                 /* 确认弹窗删除(含私有副本) */
   const activeHere = xsrcHandler && xsrcHandler.file === fileName;
-  askConfirm('删除音源', '确认删除「' + fileName + '」？\n将同时移除私有目录中的副本' + (activeHere ? '，并停用当前启用的音源。' : '。'), () => {
+  askConfirm('删除音源', '确认删除音源文件？数据将会完全移除\n「' + fileName + '」' + (activeHere ? '\n该音源当前启用中，删除后将恢复内置三通道策略。' : ''), () => {
     if (!bridgeCall('srcDelete', fileName)) { toast('删除失败', 'error'); return; }
     if (activeHere) stopXsrc(false); else updateXsrcTip();
     delete xsrcMeta[fileName];
@@ -1325,10 +1325,10 @@ function initSrcMq(scope) {                     /* 单行溢出自动跑马灯(v
 function renderSrcList() {
   let files = [];
   try { files = JSON.parse(bridgeCall('srcList') || '[]'); } catch (e) { }
-  const box = $('srcListBox'), empty = $('srcEmpty'), foot2 = $('srcFoot2');
+  const box = $('srcListBox'), empty = $('srcEmpty'), addRow = $('srcAddRow');
   if (!box) return;
   empty.style.display = files.length ? 'none' : 'block';
-  if (foot2) foot2.style.display = files.length ? 'flex' : 'none';   /* 有文件才显示底部导入钮 */
+  if (addRow) addRow.style.display = files.length ? 'block' : 'none';   /* v3.75:列表尾部同款居中导入大钮(底部固定小钮已移除) */
   box.style.display = files.length ? 'block' : 'none';               /* 滚动由外层qr-scroll统一负责(同歌单) */
   updateXsrcTip();
   box.innerHTML = files.map(f => {
