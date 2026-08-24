@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 84
-        versionName '3.70'   // ①序号叠名修复:.song .idx 13px→26px+tabular-nums,百/千位序号不再叠进歌名(平板+手机)②登录/歌单/音效改SVG图标按钮(头像/列表音符/EQ推子,aria-label保留语义,D/E不动)③中文内置预设音质治理:超重低音/DJ音效降低频、高音增强/影院降高频防浑浊刺耳;内置链补齐mergePamp同款倍频程分区防削波补偿(此前eqPre写死1无保护致音质丢失)
+        versionCode 85
+        versionName '3.71'   // ①五键外框容器改全透明(按钮自身边框不动)②D键=自定义音源管理:LX洛雪协议适配(globalThis.lx垫片+inited握手+xhttp代理绕CORS),SAF选文件导入→适配检查(失败自动清理)→私有目录sources/持久化→开关独占启用全局接管取链/歌词/封面/下载并停用官方/第三方/Cookie三通道,停用实时恢复;校验逐项探活歌曲/下载/歌词/图片+平台清单,废弃接口标记;删除含私有副本,冷启动静默恢复上次启用
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

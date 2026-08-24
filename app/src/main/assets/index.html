@@ -334,9 +334,9 @@
     display:flex; gap:8px; align-items:center;
     width:100%; margin-top:10px;   /* 宽度=容器内容宽,与.dash两栏列表左右对齐(旧680px上限致平板上收缩) */
     padding:8px; box-sizing:border-box;
-    background:var(--glass-regular);
-    border:1px solid var(--glass-border); border-radius:var(--r-md);
-    box-shadow:0 8px 24px rgba(0,0,0,.4), var(--hi-top);
+    background:transparent;                 /* v3.71:外框容器改全透明不显示圆角边框,五键自身样式不变 */
+    border:1px solid transparent; border-radius:var(--r-md);
+    box-shadow:none;
   }
   .quick-bar button {
     flex:1 1 0; min-width:0;                 /* 五键权重 1:1,等宽等大 */
@@ -349,6 +349,29 @@
   }
   @media (hover:hover) { .quick-bar button:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
   .quick-bar button svg { display:block; margin:0 auto; }   /* v3.70:A/B/C改SVG图标按钮,直读意境 */
+  /* ═══ D键·自定义音源弹窗(v3.71):复用modal体系,行卡片+开关+校验 ═══ */
+  .srcbox { width:min(92vw,560px); }
+  .src-status { font-size:11px; color:var(--muted); margin:6px 2px 8px; font-family:var(--mono); }
+  .src-status.on { color:#7ee787; }
+  .src-listbox { max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; flex-direction:column; gap:8px; padding-right:2px; }
+  .src-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--glass-thin); border:1px solid var(--glass-border); }
+  .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }
+  .src-info { flex:1; min-width:0; }
+  .src-name { font-size:13px; color:var(--text-bright); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .src-meta { font-size:10px; color:var(--muted); margin-top:3px; line-height:1.5; word-break:break-all; }
+  .src-vres { font-size:10px; margin-top:4px; color:var(--muted); line-height:1.5; white-space:pre-wrap; }
+  .switch { position:relative; width:40px; height:22px; flex-shrink:0; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }
+  .switch::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
+  .switch.on { background:rgba(236,65,65,.55); }
+  .switch.on::after { transform:translateX(18px); background:#fff; }
+  .src-btn { flex-shrink:0; font-size:10px; padding:5px 9px; border-radius:8px; border:1px solid var(--glass-border); background:rgba(255,255,255,.05); color:var(--text-bright); cursor:pointer; font-family:var(--mono); transition:border-color .15s ease, color .15s ease; }
+  .src-btn.del { color:#ff7b72; min-width:34px; }
+  .src-empty { text-align:center; padding:34px 0 26px; display:none; }
+  .src-empty-txt { font-size:12px; color:var(--muted); margin-bottom:14px; }
+  .src-empty-sub { font-size:10px; color:var(--muted); opacity:.7; margin-top:10px; }
+  .src-foot { display:flex; align-items:center; gap:10px; margin-top:12px; }
+  .src-foot .modal-btn { flex-shrink:0; width:auto; padding:9px 16px; margin:0; }
+  .src-hint { font-size:10px; color:var(--muted); opacity:.75; line-height:1.5; }
   .quick-bar button:active { transform:scale(.9); }   /* 弹性按压,与全站一致 */
 
   /* ═══ A键·扫码登录弹窗(布局同下载弹窗,内容专属) ═══ */
@@ -691,6 +714,25 @@
   </div>
 </div>
 
+<!-- ═══ D键·自定义音源管理弹窗(v3.71):布局同下载弹窗(modal-mask/modal-box体系),内含滚动列表+开关+校验 ═══ -->
+<div class="modal-mask" id="srcModal">
+  <div class="modal-box srcbox">
+    <button class="modal-x" onclick="closeSrcModal()" title="关闭">○</button>
+    <div class="modal-title">音源 · 自定义第三方源</div>
+    <div class="src-status" id="srcActiveTip">当前策略：内置三通道（官方接口 → 第三方解析 → Cookie兑底）</div>
+    <div class="src-listbox" id="srcListBox"></div>
+    <div class="src-empty" id="srcEmpty">
+      <div class="src-empty-txt">尚未配置任何音源文件</div>
+      <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入自定义第三方音源</button>
+      <div class="src-empty-sub">支持洛雪(LX)协议音源脚本 · 存于应用私有目录 · 卸载即清</div>
+    </div>
+    <div class="src-foot" id="srcFoot">
+      <button class="modal-btn secondary" onclick="srcPickImport()">导入音源文件</button>
+      <span class="src-hint">开关＝全局启用（独占接管歌曲/歌词/图片/下载，其余三通道停用）<br>校验＝检测各接口可用性 · ✕＝删除（含私有副本）</span>
+    </div>
+  </div>
+</div>
+
 <div class="modal-mask" id="eqModal">
   <div class="modal-box eqbox">
     <button class="modal-x" onclick="closeEqModal()" title="关闭">○</button>
@@ -1004,10 +1046,240 @@ $('quickBar').addEventListener('click', e => {
   if (fn === 'A') { openCookieModal(); return; }   // ㉿:扫码登录兑底
   if (fn === 'B') { openUserModal(); return; }     // B:用户歌单爬取
   if (fn === 'C') { openEqModal(); return; }      // C:音效EQ预设弹窗
+  if (fn === 'D') { openSrcModal(); return; }     // D:自定义音源管理(v3.71)
   toast(`「${fn}」功能预留位,待接入`, 'info', 1500);
 });
 
-/* ═══ A键·扫码登录兜底(cooir.json 持久化) ═══
+/* ═══ D键·自定义音源(LX洛雪协议适配,v3.71) ═══
+ * 协议侦察结论(/storage/emulated/0/音源/ 实测):脚本头注释携带 @name/@version/@author/@description;
+ * 运行期从 globalThis.lx 解构 {EVENT_NAMES,request,on,send},on(request) 注册处理器,
+ * send(inited,{sources:{平台:{actions:['musicUrl'|'pic'|'lyric'],qualitys}}}) 上报能力清单。
+ * 本App曲库为网易云 → 固定 source='wy' 取数;启用后取链/歌词/封面/下载100%由音源接管,
+ * 官方接口/第三方解析/Cookie兑底三通道全部停用防数据污染;未启用时三通道实时恢复。 */
+const XSRC_TIMEOUT = 12000;                    // 音源单次调用超时
+let xsrcHandler = null;                        // {file,name,version,author,desc,sources,actions,handler}
+let xsrcMeta = {};                             // 文件名→静态解析缓存
+function xsrcActive() { return !!xsrcHandler; }
+function escAttr(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function openSrcModal() { renderSrcList(); $('srcModal').classList.add('show'); }
+function closeSrcModal() { $('srcModal').classList.remove('show'); }
+$('srcModal').addEventListener('click', e => { if (e.target.id === 'srcModal') closeSrcModal(); });
+window.__onSrcPick = function (jsonStr) {      /* Java SAF选完文件回传 */
+  try {
+    const r = typeof jsonStr === 'string' ? JSON.parse(jsonStr) : jsonStr;
+    if (!r || !r.ok) { toast('未选择音源文件', 'info', 2000); return; }
+    toast('音源已导入：' + r.name + '，正在检查适配性…', 'info', 2500);
+    adaptCheckXsrc(r.name);
+  } catch (e) { toast('音源导入回调异常', 'error'); }
+};
+function srcPickImport() { bridgeCall('srcPick'); }
+function srcParseHeader(code, fallback) {      /* 头注释元信息解析 */
+  const m = re => { const x = String(code).match(re); return x ? x[1].trim() : ''; };
+  return { name: m(/@name\s+(.+)/) || fallback, version: m(/@version\s+(.+)/), author: m(/@author\s+(.+)/), desc: m(/@description\s+(.+)/) };
+}
+function analyzeXsrcCode(code, fallbackName) { /* 静态适配性分析(不执行) */
+  const meta = srcParseHeader(code, fallbackName);
+  const actions = new Set(['musicUrl']);
+  if (/['"]pic['"]|getPic/i.test(code)) actions.add('pic');
+  if (/['"]lyric['"]|getLyric/i.test(code)) actions.add('lyric');
+  const platforms = [...new Set((String(code).match(/\b(kw|kg|tx|wy|mg)\s*:/g) || []).map(x => x.replace(/[:\s]/g, '')))];
+  return Object.assign(meta, { actions, platforms, protocolOk: /globalThis\.lx|EVENT_NAMES/.test(String(code)) });
+}
+/* LX运行时垫片:request经/api/xhttp代理(WebView有CORS必须中转);on/send按协议捕获 */
+function buildLxShim() {
+  const shim = {
+    EVENT_NAMES: { request: 'request', inited: 'inited', alert: 'alert' },
+    version: '2.0.0', env: { os: 'android', isWindows: false, isMacOS: false, isLinux: false, isAndroid: true },
+    currentScriptInfo: { name: '', description: '', version: '', author: '' },
+    utils: { buffer: { from: () => ({}), bufToString: b => String(b) }, crypto: {}, zlib: {} },
+    on: (ev, fn) => { if (ev === shim.EVENT_NAMES.request) shim._handler = fn; },
+    send: (ev, data) => { if (ev === shim.EVENT_NAMES.inited) shim._inited = data || {}; },
+    request: (url, options, cb) => {
+      try {
+        const o = options || {};
+        const parts = ['/api/xhttp?url=' + encodeURIComponent(String(url)),
+          '&method=' + encodeURIComponent(String(o.method || 'get').toLowerCase())];
+        if (o.headers) parts.push('&headers=' + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(o.headers))))));
+        if (o.body) parts.push('&body=' + encodeURIComponent(btoa(unescape(encodeURIComponent(String(o.body))))));
+        if (o.timeout) parts.push('&timeout=' + Math.min(Number(o.timeout) / 1000 || 12, 20));
+        api(parts.join('')).then(r => {
+          if (!r || r.code !== 200) return cb(new Error((r && r.message) || '代理请求失败'));
+          let body = r.body;
+          if (r.b64) { try { body = decodeURIComponent(escape(atob(body))); } catch (e) { } }
+          cb(null, { statusCode: r.status | 0, headers: { 'content-type': r.ctype || '' }, body });
+        }).catch(e => cb(e));
+      } catch (e) { cb(e); }
+    },
+    _handler: null, _inited: null,
+  };
+  return shim;
+}
+/* 在隔离shim上执行音源脚本并等待协议握手;commit=true接管全局,否则仅返回临时ctx(校验/适配检查) */
+async function runXsrc(fileName, code, commit) {
+  if (!code) return null;
+  const shim = buildLxShim();
+  const meta = srcParseHeader(code, fileName);
+  shim.currentScriptInfo = { name: meta.name, description: meta.desc, version: meta.version, author: meta.author };
+  window.lx = shim;
+  let err = null;
+  try { (new Function(code))(); } catch (e) { err = e; }
+  const t0 = Date.now();
+  while (!shim._inited && Date.now() - t0 < 4000) await new Promise(r => setTimeout(r, 50));
+  if (err || !shim._inited || !shim._handler) {
+    if (!commit) return { fail: err ? ('脚本执行失败: ' + err.message) : (!shim._inited ? '未按洛雪协议初始化(send inited缺失)' : 'request处理器未注册') };
+    return null;
+  }
+  const sources = shim._inited.sources || {};
+  const actions = new Set(['musicUrl']);
+  Object.keys(sources).forEach(k => (sources[k].actions || []).forEach(a => actions.add(a)));
+  const ctx = { file: fileName, name: meta.name || fileName, version: meta.version, author: meta.author, desc: meta.desc, sources, actions, handler: shim._handler };
+  if (commit) { xsrcHandler = ctx; localStorage.setItem('xsrc_active', fileName); updateXsrcTip(); }
+  return ctx;
+}
+async function loadXsrc(fileName, code, silent) {
+  stopXsrc(true);
+  const ctx = await runXsrc(fileName, code, true);
+  if (!ctx) { localStorage.removeItem('xsrc_active'); if (!silent) toast('音源加载失败，已保持内置策略', 'error', 3000); return false; }
+  if (!silent) toast('音源「' + ctx.name + '」已全局接管（歌曲/歌词/图片/下载）', 'success', 3200);
+  return true;
+}
+function stopXsrc(quiet) {
+  if (xsrcHandler && !quiet) toast('音源「' + xsrcHandler.name + '」已停用，恢复内置三通道策略', 'success', 3000);
+  xsrcHandler = null;
+  localStorage.removeItem('xsrc_active');
+  updateXsrcTip();
+}
+function toggleXsrc(fileName) {                 /* 独占切换:单槽天然保证启用B停A */
+  if (xsrcHandler && xsrcHandler.file === fileName) { stopXsrc(false); renderSrcList(); return; }
+  const code = bridgeCall('srcRead', fileName) || '';
+  if (!code) { toast('音源文件读取失败', 'error'); return; }
+  toast('正在启用音源并更新全局策略…', 'info', 1500);
+  loadXsrc(fileName, code, false).then(() => renderSrcList());
+}
+function deleteXsrc(fileName, btn) {            /* 两段式确认删除(含私有副本) */
+  if (btn && btn.dataset.arm !== '1') {
+    btn.dataset.arm = '1'; btn.textContent = '确认?';
+    setTimeout(() => { if (btn.isConnected) { btn.dataset.arm = ''; btn.textContent = '✕'; } }, 2600);
+    return;
+  }
+  if (!bridgeCall('srcDelete', fileName)) { toast('删除失败', 'error'); return; }
+  const wasActive = xsrcHandler && xsrcHandler.file === fileName;
+  if (wasActive) stopXsrc(false); else updateXsrcTip();
+  delete xsrcMeta[fileName];
+  localStorage.removeItem('xsrc_verify_' + fileName);
+  toast('音源「' + fileName + '」已删除（含私有目录副本）', 'success', 2800);
+  renderSrcList();
+}
+function xsrcCallOn(ctx, action, song, quality) { /* 固定wy平台(本App曲库),超时保护 */
+  if (!ctx || !ctx.handler) return Promise.reject(new Error('音源不可用'));
+  const info = quality != null ? { musicInfo: song, type: quality } : { musicInfo: song };
+  return Promise.race([
+    Promise.resolve(ctx.handler({ source: 'wy', action, info })).then(v => { if (v == null || v === '') throw new Error('空结果'); return v; }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('音源响应超时(' + XSRC_TIMEOUT / 1000 + 's)')), XSRC_TIMEOUT)),
+  ]);
+}
+function xsrcCall(action, song, quality) { return xsrcCallOn(xsrcHandler, action, song, quality); }
+/* 导入后适配检查:静默试跑→失败自动清理私有副本,成功提示能力清单 */
+async function adaptCheckXsrc(fileName) {
+  const code = bridgeCall('srcRead', fileName) || '';
+  const info = analyzeXsrcCode(code, fileName);
+  if (!info.protocolOk) {
+    bridgeCall('srcDelete', fileName);
+    toast('无法适配：非洛雪(LX)协议音源脚本，已自动移除', 'error', 4000);
+    renderSrcList();
+    return;
+  }
+  const ctx = await runXsrc(fileName, code, false);
+  if (!ctx || ctx.fail) {
+    bridgeCall('srcDelete', fileName);
+    toast('无法适配：' + ((ctx && ctx.fail) || '协议握手失败') + '，已自动移除', 'error', 4200);
+    renderSrcList();
+    return;
+  }
+  xsrcMeta[fileName] = info;
+  toast('适配通过：「' + info.name + '」 支持 ' + [...ctx.actions].join('/') + ' · 平台 ' + Object.keys(ctx.sources).length + '个', 'success', 4000);
+  renderSrcList();
+}
+/* 校验:歌曲链接/下载/歌词/图片逐项探活+平台清单,废弃接口标记;toast汇总+行内详情 */
+async function verifyXsrc(fileName) {
+  const row = document.querySelector('[data-srcfile="' + CSS.escape(fileName) + '"] .src-vres');
+  const setRes = t => { if (row) row.textContent = t; };
+  setRes('校验中… 请稍候');
+  const wasActive = xsrcHandler && xsrcHandler.file === fileName;
+  const ctx = wasActive ? xsrcHandler : await runXsrc(fileName, bridgeCall('srcRead', fileName) || '', false);
+  if (!ctx || ctx.fail) { setRes('✗ 校验失败：音源无法运行'); toast('校验失败：音源无法运行', 'error', 3000); return; }
+  const probe = (state.song && state.song.songmid) ? state.song : { songmid: '5257138', name: '屋顶', singer: '周杰伦' };
+  const lines = [];
+  const check = async fnLabel => { try { return await fnLabel(); } catch (e) { return '✗ 废弃/不可用（' + String(e.message || e).slice(0, 40) + '）'; } };
+  let url = '';
+  lines.push('歌曲链接: ' + await check(async () => {
+    url = String(await xsrcCallOn(ctx, 'musicUrl', probe, '128k'));
+    if (!/^https?:\/\//i.test(url)) throw new Error('返回非直链');
+    return '✓ 可用';
+  }));
+  lines.push('歌曲下载: ' + (/^https?:\/\//.test(url) ? '✓ 直链可下（交原生下载器）' : '✗ 无可用直链'));
+  if (ctx.actions.has('lyric')) lines.push('歌词: ' + await check(async () => {
+    const t = await xsrcCallOn(ctx, 'lyric', probe);
+    const s = typeof t === 'string' ? t : String((t && t.lyric) || '');
+    if (!s.trim()) throw new Error('空内容');
+    return '✓ 可用';
+  })); else lines.push('歌词: － 未声明此接口');
+  if (ctx.actions.has('pic')) lines.push('图片: ' + await check(async () => {
+    const u = String(await xsrcCallOn(ctx, 'pic', probe, '128k'));
+    if (!/^https?:\/\//i.test(u)) throw new Error('返回非直链');
+    return '✓ 可用';
+  })); else lines.push('图片: － 未声明此接口');
+  lines.push('平台清单: ' + Object.keys(ctx.sources).map(k => k + '(' + (ctx.sources[k].actions || []).join(',') + ')').join(' '));
+  const good = lines.filter(l => l.includes('✓')).length, bad = lines.filter(l => l.includes('✗')).length;
+  setRes(lines.join('\n'));
+  localStorage.setItem('xsrc_verify_' + fileName, lines.join('\n'));
+  toast('校验完成: ' + good + '项可用' + (bad ? ', ' + bad + '项废弃/异常' : '') + (wasActive ? '（当前启用中）' : ''), bad ? 'warn' : 'success', 3800);
+}
+function updateXsrcTip() {
+  const tip = $('srcActiveTip');
+  if (!tip) return;
+  if (xsrcHandler) { tip.textContent = '当前策略：音源「' + xsrcHandler.name + '」全局接管中（官方/第三方/Cookie 已停用）'; tip.classList.add('on'); }
+  else { tip.textContent = '当前策略：内置三通道（官方接口 → 第三方解析 → Cookie兑底）'; tip.classList.remove('on'); }
+}
+function renderSrcList() {
+  let files = [];
+  try { files = JSON.parse(bridgeCall('srcList') || '[]'); } catch (e) { }
+  const box = $('srcListBox'), empty = $('srcEmpty'), foot = $('srcFoot');
+  if (!box) return;
+  empty.style.display = files.length ? 'none' : 'block';
+  foot.style.display = files.length ? 'flex' : 'none';
+  box.style.display = files.length ? 'flex' : 'none';
+  updateXsrcTip();
+  box.innerHTML = files.map(f => {
+    const act = xsrcHandler && xsrcHandler.file === f.name;
+    let m = xsrcMeta[f.name];
+    if (!m) m = xsrcMeta[f.name] = analyzeXsrcCode(bridgeCall('srcRead', f.name) || '', f.name);
+    const vr = localStorage.getItem('xsrc_verify_' + f.name);
+    const jsName = escAttr(f.name).replace(/'/g, "\\'");
+    return '<div class="src-item' + (act ? ' active' : '') + '" data-srcfile="' + escAttr(f.name) + '">' +
+      '<button class="src-btn del" onclick="deleteXsrc(\'' + jsName + '\',this)">✕</button>' +
+      '<div class="src-info"><div class="src-name">' + esc(m.name) + (act ? ' <span style="color:#7ee787">● 启用中</span>' : '') + '</div>' +
+      '<div class="src-meta">' + (m.version ? 'v' + esc(m.version) + ' · ' : '') + esc(m.author || '未知作者') + ' · ' + Math.max(1, Math.round(f.size / 1024)) + 'KB<br>' +
+      esc((m.desc || '').slice(0, 60)) + '<br>支持: ' + [...m.actions].join('/') + ' · 平台: ' + (m.platforms.join(',') || '-') + '</div>' +
+      (vr ? '<div class="src-vres">' + esc(vr) + '</div>' : '') + '</div>' +
+      '<button class="src-btn" onclick="verifyXsrc(\'' + jsName + '\')">校验</button>' +
+      '<div class="switch' + (act ? ' on' : '') + '" onclick="toggleXsrc(\'' + jsName + '\')"></div></div>';
+  }).join('');
+}
+(function restoreXsrc() {                      /* 冷启动恢复:上次启用的音源静默重载 */
+  try {
+    const f = localStorage.getItem('xsrc_active');
+    if (!f) return;
+    const list = JSON.parse(bridgeCall('srcList') || '[]');
+    if (!list.some(x => x.name === f)) { localStorage.removeItem('xsrc_active'); return; }
+    loadXsrc(f, bridgeCall('srcRead', f) || '', true).then(okr => {
+      if (okr) console.log('[xsrc] 已恢复启用: ' + f);
+      else localStorage.removeItem('xsrc_active');
+    });
+  } catch (e) { }
+})();
+
+/* ═══ A键·扫码登录兑底(cooir.json 持久化) ═══
  * 官方 unikey → 本地 SVG 二维码 → 3s 轮询状态 → 803 捕获 Cookie 双写运行态+文件 */
 let qrTimer = null, qrKey = '';
 function openCookieModal() {
@@ -1679,8 +1951,14 @@ function withTimeout(promise, ms) {
 async function fetchUrlWithRetry(song, seq, onRetry) {
   for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
     try {
-      const r = await withTimeout(
-        api(`/api/url?songmid=${encodeURIComponent(song.songmid)}&quality=${QUALITY}`), URL_TIMEOUT_MS);
+      const rq = xsrcActive()
+        ? xsrcCall('musicUrl', song, QUALITY).then(u => {                                /* v3.71:音源接管取链,无效链接计入重试 */
+            const s2 = String(u);
+            if (!/^https?:\/\//i.test(s2)) throw new Error('音源返回无效链接');
+            return { code: 200, data: { url: s2, via: 'xsrc' } };
+          })
+        : api(`/api/url?songmid=${encodeURIComponent(song.songmid)}&quality=${QUALITY}`);
+      const r = await withTimeout(rq, URL_TIMEOUT_MS);
       if (seq !== playSeq) return 'EXPIRED';
       if (r.code === 200 && r.data && r.data.url) return r;
       throw new Error(r.message || '加载失败');       // 业务失败同样计入重试
@@ -1757,13 +2035,18 @@ async function play(i, list) {
       rollbackPlayback(prev);
       return;
     }
-    const viaTag = r.data.via === 'toubiec' ? '<span class="tag3rd">VIP</span>' : '';
-    setPlayerLine($('nowName'), `${esc(song.name)}${viaTag}`);   // 歌名+VIP标签作为整体跑马灯
-    if (r.data.via === 'toubiec') toast(`已通过VIP通道播放「${song.name}」`, 'warn', 3000);
+    const viaTag = r.data.via === 'toubiec' ? '<span class="tag3rd">VIP</span>' : (r.data.via === 'xsrc' ? '<span class="tag3rd">源</span>' : '');
+    setPlayerLine($('nowName'), `${esc(song.name)}${viaTag}`);   // 歌名+通道标签作为整体跑马灯
     if (localStorage.getItem('eqArmed')) audio.crossOrigin = 'anonymous';   // EQ启用过:以CORS模式加载(WebAudio采集必需,CDN已实测ACAO:*)
     maybeAutoBuildEq();                    // 启动遗留的自动预设在此建链填参
     audio.src = r.data.url;
     audio.play().catch(() => { });   // 自动播放被拦截时静默,用户手动点击播放即可
+    if (r.data.via === 'xsrc' && xsrcHandler.actions.has('pic')) {                        /* v3.71:封面也交音源(未声明则保留曲库图) */
+      xsrcCall('pic', song, '128k').then(u => {
+        const s2 = String(u);
+        if (seq === playSeq && /^https?:\/\//i.test(s2)) setBgCover(s2);
+      }).catch(() => { });
+    } else if (r.data.via === 'toubiec') toast(`已通过VIP通道播放「${song.name}」`, 'warn', 3000);
   } catch (e) {
     if (seq !== playSeq) return;
     setPlayerLine($('nowName'), '播放失败');
@@ -2254,18 +2537,30 @@ async function downloadSong() {
   closeDlModal();
   toast('正在获取音乐格式…', 'info', 4000);
   try {
-    const r = await api(`/api/url?songmid=${s.songmid}&quality=${QUALITY}`);
-    if (r.code !== 200) { toast(`获取失败: ${r.message}`, 'error'); return; }
-    // 先向后端探测真实封装格式(与实际下载文件后缀一致,避免提示 .mp3 实际 .m4a)
-    let ext = r.data.quality === 'flac' ? 'flac' : 'mp3';
-    try {
-      const fi = await api(`/api/download?songmid=${s.songmid}&quality=${QUALITY}&info=1`);
-      if (fi.code === 200 && fi.data && fi.data.ext) ext = fi.data.ext;
-    } catch (e) { /* 探测失败退回猜测后缀 */ }
+    let url, ext = 'mp3';
+    if (xsrcActive()) {                          /* v3.71:音源接管下载——直链由音源解析,官方探测通道停用 */
+      url = String(await xsrcCall('musicUrl', s, QUALITY));
+      if (!/^https?:\/\//i.test(url)) { toast('音源返回无效链接，下载取消', 'error'); return; }
+      ext = /\.flac(\?|$)|flac24bit|flac$/i.test(url) ? 'flac'
+        : /\.ape(\?|$)/i.test(url) ? 'ape'
+        : /\.wav(\?|$)/i.test(url) ? 'wav'
+        : /\.m4a|\.mp4|isuffix=m4a/i.test(url) ? 'm4a'
+        : (/flac/i.test(QUALITY) ? 'flac' : 'mp3');
+    } else {
+      const r = await api(`/api/url?songmid=${s.songmid}&quality=${QUALITY}`);
+      if (r.code !== 200) { toast(`获取失败: ${r.message}`, 'error'); return; }
+      url = r.data.url;
+      // 先向后端探测真实封装格式(与实际下载文件后缀一致,避免提示 .mp3 实际 .m4a)
+      ext = r.data.quality === 'flac' ? 'flac' : 'mp3';
+      try {
+        const fi = await api(`/api/download?songmid=${s.songmid}&quality=${QUALITY}&info=1`);
+        if (fi.code === 200 && fi.data && fi.data.ext) ext = fi.data.ext;
+      } catch (e) { /* 探测失败退回猜测后缀 */ }
+    }
     const filename = `${safeName(s.name)}-${safeName(s.singer)}.${ext}`;
     // 无端口模式:直链交给原生 DownloadManager(文件名由 App 精确控制,
     // 不再依赖同源代理与 Content-Disposition 防止后缀错乱)
-    nativeDownload(filename, r.data.url);
+    nativeDownload(filename, url);
   } catch (e) {
     toast('下载请求失败', 'error');
   }
@@ -2375,7 +2670,11 @@ async function loadLyric(song, seq) {
   let r = null;
   for (let attempt = 1; attempt <= URL_MAX_RETRY; attempt++) {
     try {
-      r = await withTimeout(api(`/api/lyric?songmid=${encodeURIComponent(songKey)}`), URL_TIMEOUT_MS);
+      r = (xsrcActive() && xsrcHandler.actions.has('lyric'))
+        ? await withTimeout(xsrcCall('lyric', song).then(t => ({                        /* v3.71:音源接管歌词(LX返回串或{lyric,tlyric})归一化 */
+          code: 200, data: { lyric: typeof t === 'string' ? t : String((t && t.lyric) || '') }
+        })), URL_TIMEOUT_MS)
+        : await withTimeout(api(`/api/lyric?songmid=${encodeURIComponent(songKey)}`), URL_TIMEOUT_MS);
       if (!state.song || state.song.songmid !== songKey) return; // 切歌竞态保护
       if (seq !== undefined && seq !== playSeq) return;          // 双保险:过期响应丢弃
       break;   // 收到业务响应(含暂无歌词):不再重试

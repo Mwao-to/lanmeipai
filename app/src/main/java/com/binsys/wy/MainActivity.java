@@ -454,7 +454,138 @@ public class MainActivity extends Activity {
                 return "";
             }
         }
+
+        /* ═══ D键·自定义音源(sources/ 私有目录管理,v3.71) ═══
+         * 落盘 getExternalFilesDir("sources") = /sdcard/Android/data/com.binsys.wy/files/sources/
+         * 与debug.log同域,卸载即清;JS经srcList/srcRead/srcDelete同步管理,srcPick走SAF选文件。 */
+
+        /** 枚举私有音源目录:JSON数组[{name,size,mtime}],按修改时间倒序 */
+        @JavascriptInterface
+        public String srcList() {
+            try {
+                File dir = getExternalFilesDir("sources");
+                StringBuilder sb = new StringBuilder("[");
+                File[] fs = dir != null && dir.isDirectory() ? dir.listFiles() : null;
+                if (fs != null) {
+                    java.util.Arrays.sort(fs, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+                    for (File f : fs) {
+                        if (!f.isFile()) continue;
+                        if (sb.length() > 1) sb.append(',');
+                        sb.append(new JSONObject().put("name", f.getName())
+                                .put("size", f.length()).put("mtime", f.lastModified()).toString());
+                    }
+                }
+                return sb.append(']').toString();
+            } catch (Throwable t) {
+                Dbg.w(MainActivity.this, "‼️ [src] srcList失败", t);
+                return "[]";
+            }
+        }
+
+        /** 读取指定音源文件全文(路径穿越防护);失败/不存在返回空串 */
+        @JavascriptInterface
+        public String srcRead(String name) {
+            try {
+                if (name == null || name.contains("/") || name.contains("\\") || name.contains("..")) return "";
+                File f = new File(getExternalFilesDir("sources"), name);
+                if (!f.isFile()) return "";
+                FileInputStream r = new FileInputStream(f);
+                ByteArrayOutputStream bo = new ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = r.read(buf)) > 0) bo.write(buf, 0, n);
+                r.close();
+                return new String(bo.toByteArray(), StandardCharsets.UTF_8);
+            } catch (Throwable t) {
+                Dbg.w(MainActivity.this, "‼️ [src] srcRead失败: " + name, t);
+                return "";
+            }
+        }
+
+        /** 删除指定音源文件(私有目录副本一并移除);成功返回true */
+        @JavascriptInterface
+        public boolean srcDelete(String name) {
+            try {
+                if (name == null || name.contains("/") || name.contains("\\") || name.contains("..")) return false;
+                File f = new File(getExternalFilesDir("sources"), name);
+                boolean ok = f.isFile() && f.delete();
+                Dbg.w(MainActivity.this, "[src] 删除" + (ok ? "成功: " : "失败: ") + name);
+                return ok;
+            } catch (Throwable t) {
+                Dbg.w(MainActivity.this, "‼️ [src] srcDelete失败: " + name, t);
+                return false;
+            }
+        }
+
+        /** 调起系统文件管理器(SAF ACTION_OPEN_DOCUMENT)选音源文件;结果经__onSrcPick回传页面 */
+        @JavascriptInterface
+        public void srcPick() {
+            runOnUiThread(() -> {
+                try {
+                    Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("*/*");
+                    startActivityForResult(i, REQ_SRC_PICK);
+                } catch (Throwable t) {
+                    Dbg.w(MainActivity.this, "‼️ [src] 文件选择器不可用", t);
+                    postJs("window.__onSrcPick && window.__onSrcPick({ok:false})");
+                }
+            });
+        }
     }
+
+    /** SAF选中文件的显示名(OpenableColumns.DISPLAY_NAME),失败返回null */
+    private String queryDisplayName(Uri uri) {
+        try {
+            Cursor c = getContentResolver().query(uri, null, null, null, null);
+            if (c != null) {
+                try {
+                    int ci = c.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    if (c.moveToFirst() && ci >= 0) return c.getString(ci);
+                } finally { c.close(); }
+            }
+        } catch (Throwable ignored) { }
+        return null;
+    }
+
+    /** D键音源SAF选文件回调:拷贝到私有sources/目录后回传页面 __onSrcPick({ok,name,size}) */
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQ_SRC_PICK) return;
+        String payload = "{\"ok\":false}";
+        try {
+            Uri uri = (resultCode == RESULT_OK && data != null) ? data.getData() : null;
+            if (uri != null) {
+                String name = queryDisplayName(uri);
+                if (name == null || name.isEmpty()) name = "source_" + System.currentTimeMillis();
+                name = name.replaceAll("[/\\\\]", "_").trim();
+                File dir = getExternalFilesDir("sources");
+                if (dir != null && !dir.exists()) dir.mkdirs();
+                String base = name, ext = "";
+                int dot = name.lastIndexOf('.');
+                if (dot > 0) { base = name.substring(0, dot); ext = name.substring(dot); }
+                File dst = new File(dir, name);
+                int dup = 2;
+                while (dst.exists()) dst = new File(dir, base + "_" + (dup++) + ext);
+                InputStream in = getContentResolver().openInputStream(uri);
+                FileOutputStream out = new FileOutputStream(dst);
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                in.close();
+                out.close();
+                payload = new JSONObject().put("ok", true).put("name", dst.getName()).put("size", dst.length()).toString();
+                Dbg.w(this, "[src] 音源已导入: " + dst.getName() + " (" + dst.length() + "B)");
+            }
+        } catch (Throwable t) {
+            Dbg.w(this, "‼️ [src] 音源导入失败", t);
+        }
+        final String pl = payload;
+        postJs("window.__onSrcPick && window.__onSrcPick(" + pl + ")");
+    }
+
+    private static final int REQ_SRC_PICK = 4210;   // D键音源SAF选文件请求码
 
     /** 向页面派发下载器事件(status: start/progress/done/error)。 */
     private void dlEvent(String status, String filename, String detail) {
