@@ -2763,7 +2763,7 @@ async function loadLyric(song, seq) {
     try {
       if (xsrcActive() && xsrcHandler.ok && xsrcHandler.ok.lyric === false) {
         notifyBadOnce('lyric');                                                /* v3.79:自检判定失效→直接跳过不请求不重试 */
-        r = { code: 404, data: {} };
+        r = { code: 404, data: {}, xsrcSkip: true };                           /* v3.80:带跳过标记,下游不再误报'暂无歌词' */
       }
       else if (!(xsrcActive() && xsrcHandler.actions.has('lyric'))) r = null;   // 未声明→走内置曲库歌词
       else r = await withTimeout(xsrcCall('lyric', song).then(t => ({                        /* v3.71:音源接管歌词(LX返回串或{lyric,tlyric})归一化 */
@@ -2786,7 +2786,7 @@ async function loadLyric(song, seq) {
   }
   try {
     if (r.code !== 200 || !r.data || !r.data.lyric) {
-      toast('这首歌暂无歌词', 'info', 2500);
+      if (!r.xsrcSkip) toast('这首歌暂无歌词', 'info', 2500);   /* v3.80:音源歌词接口失效已单独提醒,不再误报'暂无歌词'误导用户 */
       return;
     }
     const lines = r.data.lyric.split('\n').map(l => {
