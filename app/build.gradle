@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 82
-        versionName '3.68'   // 五键快捷条平板适配:去掉旧max-width:680px居中限制,快捷条宽度与上方双栏列表(.dash)左右边缘对齐(宽屏不再收缩居中);窄屏观感不变
+        versionCode 83
+        versionName '3.69'   // 平板/手机适配审计+渲染策略工具箱:①手机≤700px双栏折叠单栏不再挤成两窄列②五键触控目标增高③搜索框min-width:0防溢出④抽取可复用兑底原语hasBridge/bridgeCall/fetchWithTimeout(api桌面fetch加15s超时防永久挂起)/importPamp三源导入器合一⑤chunkedRender异步分帧渲染(搜索大结果集>120行不卡输入)⑥prewarmEq预加载渲染(EQ首屏开窗零计算直出,预设变更自动失效重建)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
