@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 73
-        versionName '3.60'   // EQ弹窗:预设名称与㉿标记字号统一增大0.3倍(7.75→10.1px);列表视口锁定首屏恰好8条(56vh→282px,行高30+间隔6),其余550条下滑查看
+        versionCode 74
+        versionName '3.61'   // 补全ISO标准十段手动EQ:「手动十段」置顶,31/62/125/250/500/1k/2k/4k/8k/16k十根滑杆±6dB拖动实时生效;eqw.json存manual数组开机自动沿用;全量校验544导入预设12244节滤波器:频率20~19871Hz全覆盖,增益±15在引擎±24内,8574个q=0为PowerAMP约定值引擎兜底Q=1正确
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
