@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 96
-        versionName '3.82'   // ①修复:自检判定歌曲播放(musicUrl)接口失效后播放仍重试并误报'网络环境较差'→取链入口直接FAILED_SRC跳过,专属提醒'歌曲播放接口已失效无法播放'(每源一次),回滚上一曲不再弹网络差兜底
+        versionCode 97
+        versionName '3.83'   // ①D按钮去文字化:替换为SVG图标(17×17/stroke2/圆角线帽,与A登录/B歌单/C音效同规格)——文件折角轮廓+内嵌音符,呼音源.js文件意境
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
