@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 99
-        versionName '3.85'   // ①SAF选择器初始定位/storage/emulated/0/音源/(EXTRA_INITIAL_URI,目录不存在系统自动回退)②三套校验策略统一:抽XSRC_PROBE探针曲常量+judgeXsrcVal统一判定口径(musicUrl/pic须直链,lyric非空),导入适配/启用自检/手动校验三处共用③校验弹窗'下载可下'改真探测:经xhttp代理HEAD验直链可达性(代理白名单放行head),不再只查格式冒充④stopXsrc清理失效提醒去重键,重启用后提醒不再被旧键吞掉
+        versionCode 100
+        versionName '3.86'   // ①校验弹窗精简:只测关键三项(歌曲播放含下载可达/歌词/封面),输出简单易懂,标题'音源校验·文件名'长名缩略显示②禁止重复导入:SAF导入先读入内存算SHA-256与sources目录逐文件比对,内容相同拒收回执dup提醒;>8MB拒收③HTML静态加密:APK内不再有明文——assets仅打包index.bin(build.gradle packEncryptedHtml构建期加密+sourceSets排除明文),dex内EMBEDDED_HTML→EMBEDDED_ENC密文;算法keystream=SHA256(KEY‖u32be(block))异或,三端同构(Java/Python/Node),运行时解密~200KB<10ms零性能损耗;仓库保留唯一明文源assets/index.html供编辑/测试
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
@@ -48,19 +48,47 @@ android {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-}
 
-// ═══ 构建期同步:把 main_app.py 中的内嵌界面提取为 assets/index.html ═══
-// 单一数据源仍是 corepkg/src/main_app.py(AOT 编译包内的源文件),assets 只是构建产物:
-// App 端零 Python 依赖即时渲染界面,同时保持服务器模式(/ 路由)共用同一份 HTML
-tasks.register('syncEmbeddedHtml') {
-    doLast {
-        def py = file('corepkg/src/main_app.py').text
-        def m = (py =~ /(?s)EMBEDDED_HTML = r'''(.*)'''/)
-        if (!m.find()) throw new GradleException('EMBEDDED_HTML 未找到,无法生成 assets/index.html')
-        file('src/main/assets').mkdirs()
-        file('src/main/assets/index.html').text = m.group(1)
-        println "✓ assets/index.html 已同步 (${m.group(1).length()} 字符)"
+    // v3.86:APK 内不打包明文 index.html(仅加密后的 index.bin 随包)
+    sourceSets {
+        main {
+            assets {
+                excludes += ['index.html']
+            }
+        }
     }
 }
-preBuild.dependsOn 'syncEmbeddedHtml'
+
+// ═══ 构建期打包:assets/index.html(仓库内唯一明文源) → index.bin 加密产物 ═══
+// 算法与 MainActivity.xorDecrypt / tools/crypt_html.py 同构: keystream[i]=SHA256(KEY‖u32be(block)) 异或
+// APK 中不再存在明文 HTML(dex 内的 EMBEDDED_ENC 也是同算法密文),运行时解密 ~200KB <10ms 无性能损耗
+tasks.register('packEncryptedHtml') {
+    def srcFile = file('src/main/assets/index.html')
+    def dstFile = file('src/main/assets/index.bin')
+    inputs.file(srcFile)
+    outputs.file(dstFile)
+    doLast {
+        def keyParts = ['9f3ac1e2', '5d84bb07', '21ce6a49', 'f0183d76', 'ab52de90', '47c31f68', 'd9b024af', '6e1c8533']
+        def key = new byte[32]
+        keyParts.eachWithIndex { p, ki ->
+            for (int j = 0; j < 4; j++) key[ki * 4 + j] = (byte) Integer.parseInt(p.substring(j * 2, j * 2 + 2), 16)
+        }
+        def data = srcFile.bytes
+        def md = java.security.MessageDigest.getInstance('SHA-256')
+        def out = new byte[data.length]
+        int i = 0, counter = 0
+        while (i < data.length) {
+            md.reset()
+            md.update(key)
+            md.update((byte) (counter >>> 24)); md.update((byte) (counter >>> 16))
+            md.update((byte) (counter >>> 8)); md.update((byte) counter)
+            def h = md.digest()
+            int n = Math.min(32, data.length - i)
+            for (int j = 0; j < n; j++) out[i + j] = (byte) (data[i + j] ^ h[j])
+            i += n; counter++
+        }
+        dstFile.bytes = out
+        println "✓ assets/index.bin 已加密打包 (${data.length}B 明文→密文)"
+    }
+}
+preBuild.dependsOn 'packEncryptedHtml'

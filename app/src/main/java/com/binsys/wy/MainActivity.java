@@ -50,6 +50,7 @@ import java.net.URLDecoder;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -162,7 +163,9 @@ public class MainActivity extends Activity {
         // 没有启动画面、没有二次切换、没有多余历史记录 —— 打开即真界面。
         // 数据由前端 bootLoop 在 Python 就绪后自动补载;
         // BASE_URL 仅固定页面 origin 以兼容旧版 localStorage
-        String html = readAsset("index.html");
+        // v3.86:加载加密 index.bin 运行时解密(~200KB <10ms),APK 内不再有明文 HTML
+        byte[] enc = readAssetBytes("index.bin");
+        String html = new String(xorDecrypt(enc), StandardCharsets.UTF_8);
         web.loadDataWithBaseURL(BASE_URL, html, "text/html", "utf-8", null);
         web.clearFocus();   // 清掉 WebView 自动抢走的焦点(避免焦点落到搜索框弹键盘)
         Dbg.w(this, "[ui] 界面已从 assets 即时渲染(" + html.length() + " 字节)");
@@ -242,16 +245,49 @@ public class MainActivity extends Activity {
     }
 
     /** 从内置 assets 读取文本文件(构建期由 syncEmbeddedHtml 任务从 main_app.py 同步)。 */
-    private String readAsset(String name) {
+    private byte[] readAssetBytes(String name) {
         try (InputStream is = getAssets().open(name)) {
             ByteArrayOutputStream bo = new ByteArrayOutputStream();
             byte[] buf = new byte[8192];
             int n;
             while ((n = is.read(buf)) > 0) bo.write(buf, 0, n);
-            return bo.toString("UTF-8");
+            return bo.toByteArray();
         } catch (Exception e) {
             Dbg.w(this, "‼️ 读取内置界面失败: " + name, e);
-            return "<h3 style='color:#e33;font-family:sans-serif'>内置界面缺失</h3>";
+            return null;
+        }
+    }
+
+    /** v3.86:密钥分4段存放(与 app/build.gradle packEncryptedHtml / tools/crypt_html.py 拼接结果一致) */
+    private static final String[] HTML_KEY_PARTS = {
+            "9f3ac1e2", "5d84bb07", "21ce6a49", "f0183d76",
+            "ab52de90", "47c31f68", "d9b024af", "6e1c8533"
+    };
+
+    /** keystream[i]=SHA256(KEY‖u32be(block)),按32B块异或;自逆运算,加解密同一函数 */
+    static byte[] xorDecrypt(byte[] data) {
+        try {
+            byte[] key = new byte[32];
+            for (int p = 0; p < 8; p++)
+                for (int j = 0; j < 4; j++)
+                    key[p * 4 + j] = (byte) Integer.parseInt(HTML_KEY_PARTS[p].substring(j * 2, j * 2 + 2), 16);
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] out = new byte[data.length];
+            int i = 0, counter = 0;
+            while (i < data.length) {
+                md.reset();
+                md.update(key);
+                md.update((byte) (counter >>> 24)); md.update((byte) (counter >>> 16));
+                md.update((byte) (counter >>> 8)); md.update((byte) counter);
+                byte[] h = md.digest();
+                int n = Math.min(32, data.length - i);
+                for (int j = 0; j < n; j++) out[i + j] = (byte) (data[i + j] ^ h[j]);
+                i += n; counter++;
+            }
+            return out;
+        } catch (Throwable t) {
+            android.util.Log.e("wy-dbg", "界面解密失败", t);
+            return new byte[0];
         }
     }
 
@@ -567,27 +603,61 @@ public class MainActivity extends Activity {
                 name = name.replaceAll("[/\\\\]", "_").trim();
                 File dir = getExternalFilesDir("sources");
                 if (dir != null && !dir.exists()) dir.mkdirs();
-                String base = name, ext = "";
-                int dot = name.lastIndexOf('.');
-                if (dot > 0) { base = name.substring(0, dot); ext = name.substring(dot); }
-                File dst = new File(dir, name);
-                int dup = 2;
-                while (dst.exists()) dst = new File(dir, base + "_" + (dup++) + ext);
+                java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream();   /* v3.86:先读入内存算哈希,拦截重复导入 */
                 InputStream in = getContentResolver().openInputStream(uri);
-                FileOutputStream out = new FileOutputStream(dst);
                 byte[] buf = new byte[8192];
                 int n;
-                while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
                 in.close();
-                out.close();
-                payload = new JSONObject().put("ok", true).put("name", dst.getName()).put("size", dst.length()).toString();
-                Dbg.w(this, "[src] 音源已导入: " + dst.getName() + " (" + dst.length() + "B)");
+                byte[] content = bo.toByteArray();
+                if (content.length > 8 * 1024 * 1024) {                                /* 与xhttp上限一致:音源脚本不应超过8MB */
+                    payload = new JSONObject().put("ok", false).put("reason", "toolarge").toString();
+                } else {
+                    byte[] digest = MessageDigest.getInstance("SHA-256").digest(content);
+                    File dup = findDuplicateSource(dir, digest);
+                    if (dup != null) {
+                        payload = new JSONObject().put("ok", false).put("dup", true).put("name", dup.getName()).toString();
+                        Dbg.w(this, "[src] 拒绝重复导入(与 " + dup.getName() + " 内容相同)");
+                    } else {
+                        String base = name, ext = "";
+                        int dot = name.lastIndexOf('.');
+                        if (dot > 0) { base = name.substring(0, dot); ext = name.substring(dot); }
+                        File dst = new File(dir, name);
+                        int dupN = 2;
+                        while (dst.exists()) dst = new File(dir, base + "_" + (dupN++) + ext);
+                        FileOutputStream out = new FileOutputStream(dst);
+                        out.write(content);
+                        out.close();
+                        payload = new JSONObject().put("ok", true).put("name", dst.getName()).put("size", dst.length()).toString();
+                        Dbg.w(this, "[src] 音源已导入: " + dst.getName() + " (" + dst.length() + "B)");
+                    }
+                }
             }
         } catch (Throwable t) {
             Dbg.w(this, "‼️ [src] 音源导入失败", t);
         }
         final String pl = payload;
         postJs("window.__onSrcPick && window.__onSrcPick(" + pl + ")");
+    }
+
+    /** v3.86:遍历私有sources目录逐文件SHA-256比对,返回内容完全相同的已有文件;无重复返回null */
+    private File findDuplicateSource(File dir, byte[] digest) {
+        try {
+            File[] fs = dir != null && dir.isDirectory() ? dir.listFiles() : null;
+            if (fs == null) return null;
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            for (File f : fs) {
+                if (!f.isFile() || f.length() > 8 * 1024 * 1024) continue;
+                md.reset();
+                FileInputStream r = new FileInputStream(f);
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = r.read(buf)) > 0) md.update(buf, 0, n);
+                r.close();
+                if (MessageDigest.isEqual(md.digest(), digest)) return f;
+            }
+        } catch (Throwable ignored) { }
+        return null;
     }
 
     private static final int REQ_SRC_PICK = 4210;   // D键音源SAF选文件请求码

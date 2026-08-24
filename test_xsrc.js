@@ -3,7 +3,24 @@
  * LX协议握手/静态分析/调用封装/非法脚本拒绝 等核心逻辑。 */
 const fs = require('fs');
 const path = require('path');
-const html = fs.readFileSync(path.join(__dirname, 'app/src/main/assets/index.html'), 'utf8');
+const crypto = require('crypto');
+/* v3.86:从 main_app.py 密文解密出界面(与Java/Python/Gradle同构keystream),端到端验证加密链 */
+function embHtml() {
+  const py = fs.readFileSync(path.join(__dirname, 'app/corepkg/src/main_app.py'), 'utf8');
+  const enc = Buffer.from(py.match(/EMBEDDED_ENC = '([^']+)'/)[1], 'base64');
+  const key = Buffer.from('9f3ac1e25d84bb0721ce6a49f0183d76ab52de9047c31f68d9b024af6e1c8533', 'hex');
+  const out = Buffer.from(enc);
+  let i = 0, counter = 0;
+  while (i < out.length) {
+    const cBuf = Buffer.alloc(4); cBuf.writeUInt32BE(counter);
+    const h = crypto.createHash('sha256').update(key).update(cBuf).digest();
+    const n = Math.min(32, out.length - i);
+    for (let j = 0; j < n; j++) out[i + j] ^= h[j];
+    i += n; counter++;
+  }
+  return out.toString('utf8');
+}
+const html = embHtml();
 const START = html.indexOf('/* ═══ D键·自定义音源(LX洛雪协议适配');
 const END = html.indexOf('/* ═══ A键·扫码登录兜底') >= 0 ? html.indexOf('/* ═══ A键·扫码登录兜底') : html.indexOf('/* ═══ A键·扫码登录兑底');
 if (START < 0 || END < 0 || END <= START) { console.error('✗ 未找到xsrc区块标记'); process.exit(1); }
@@ -138,6 +155,13 @@ function getSongId(m) { return m.songmid || m.id }`;
   ok(!judgeXsrcVal('pic', 'not-a-url').ok && judgeXsrcVal('pic', { lyric: '' }).ok === false, 'pic同musicUrl口径');
   ok(/const XSRC_PROBE = \{ songmid: '5257138', name: '屋顶'/.test(block), '探针曲常量共用');
   ok(/EXTRA_INITIAL_URI/.test(fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/binsys/wy/MainActivity.java'), 'utf8')), 'SAF初始定位音源目录');
+
+  console.log('[11] v3.86四项:去重导入/校验精简/标题缩略/HTML加密');
+  ok(/findDuplicateSource/.test(fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/binsys/wy/MainActivity.java'), 'utf8')), 'Java内容哈希去重拦截');
+  ok(/音源「' \+ r\.name \+ '」已存在，内容相同，未重复导入/.test(html), 'JS重复回执提醒');
+  ok(/歌曲播放与下载正常/.test(html) && !/下载直链可下\(HTTP/.test(html), '校验输出精简为关键项');
+  ok(/vrfy-name \{ display:inline-block; max-width:56vw/.test(html), '校验弹窗长文件名缩略');
+  ok(/EMBEDDED_ENC = '/.test(fs.readFileSync(path.join(__dirname, 'app/corepkg/src/main_app.py'), 'utf8')) && html.includes('<!DOCTYPE html>'), 'dex内HTML已密文化且解密链路可用');
 
   console.log(`\n═══ 结果: ${pass} 通过, ${fail} 失败 ═══`);
   process.exit(fail ? 1 : 0);
