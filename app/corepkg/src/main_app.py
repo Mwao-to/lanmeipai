@@ -2552,7 +2552,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .song:active { transform:scale(.985); }        /* 行级弹性按压 */
   .song.playing { background:linear-gradient(90deg, rgba(194,12,12,.23), transparent); border-left-color:var(--accent); }
   .song.playing .name { color:var(--text-bright); }
-  .song .idx { width:13px; min-width:13px; text-align:center; color:var(--muted); font-size:10px; flex-shrink:0; font-family:var(--mono); }
+  .song .idx { width:26px; min-width:26px; text-align:center; color:var(--muted); font-size:10px; flex-shrink:0; font-family:var(--mono); font-variant-numeric:tabular-nums; }   /* v3.70:13px→26px容纳3~4位数,修复百/千位序号叠进歌名(平板+手机同修) */
   .song.playing .idx { color:#fff; opacity:.92; }
   .song .info { flex:1; min-width:0; white-space:nowrap; overflow:hidden; }
   .song .track { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; will-change:transform; }
@@ -2693,6 +2693,7 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     transition:transform var(--t-press) var(--spring), border-color .15s ease, background .15s ease;
   }
   @media (hover:hover) { .quick-bar button:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
+  .quick-bar button svg { display:block; margin:0 auto; }   /* v3.70:A/B/C改SVG图标按钮,直读意境 */
   .quick-bar button:active { transform:scale(.9); }   /* 弹性按压,与全站一致 */
 
   /* ═══ A键·扫码登录弹窗(布局同下载弹窗,内容专属) ═══ */
@@ -2996,9 +2997,9 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
 
   <!-- 五键快捷条:ABCDE 功能占位,宽度与上方双栏列表左右边缘对齐(v3.68平板适配) -->
   <div class="quick-bar" id="quickBar">
-    <button type="button" data-fn="A">登录</button>
-    <button type="button" data-fn="B">歌单</button>
-    <button type="button" data-fn="C">音效</button>
+    <button type="button" data-fn="A" aria-label="登录" title="登录"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg></button>
+    <button type="button" data-fn="B" aria-label="歌单" title="歌单"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h9"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M20 17.5V9l3-1.2"/></svg></button>
+    <button type="button" data-fn="C" aria-label="音效EQ" title="音效EQ"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 3v18M12 3v18M19 3v18"/><circle cx="5" cy="15" r="2.4" fill="currentColor" stroke="none"/><circle cx="12" cy="8" r="2.4" fill="currentColor" stroke="none"/><circle cx="19" cy="11.5" r="2.4" fill="currentColor" stroke="none"/></svg></button>
     <button type="button" data-fn="D">D</button>
     <button type="button" data-fn="E">E</button>
   </div>
@@ -4247,15 +4248,15 @@ const EQ_BANDS = [100, 200, 400, 800, 1000, 3000, 6000, 10000];
 const EQ_PRESETS = {
   '正常':     [0,0,0,0,0,0,0,0],
   '倍思经典': [2,2,1,0,-1,1,2,2],
-  '超重低音': [6,4,1,0,-1,0,1,2],
-  '影院音效': [4,3,1,-1,-2,1,3,4],
+  '超重低音': [5,3,1,0,-1,0,1,2],   /* v3.70:低频6/4→5/3防轰头浑浊 */
+  '影院音效': [3,2,1,-1,-2,1,3,3],   /* v3.70:两端V型各降1dB防浑浊刺耳 */
   'HIFI现场': [2,1,0,-1,1,2,3,3],
   '清澈人声': [-1,-2,0,2,3,2,1,0],
-  'DJ音效':   [6,5,2,-1,-2,2,4,5],
+  'DJ音效':   [5,3,1,-1,-2,1,3,4],    /* v3.70:低频6/5→5/3高频4/5→3/4,防轰头浑浊 */
   '经典流行': [2,2,0,-1,0,2,2,2],
   '爵士':     [2,2,1,2,1,0,1,2],
   '古典':     [2,1,0,0,0,1,2,2],
-  '高音增强': [0,0,0,0,1,2,4,6],
+  '高音增强': [0,0,0,0,1,2,3,5]      /* v3.70:高频4/6→3/5防刺耳 */,
   '自然原声': [1,1,0,0,0,0,0,1],
   '摇滚经典': [3,2,1,1,-1,1,2,3]
 };
@@ -4442,7 +4443,10 @@ async function applyEq(name) {
   if (name !== '正常' && !eqCtx && !ensureEqChain(vals.length)) return;
   if (eqCtx) {
     if (eqCtx.state === 'suspended') { try { await eqCtx.resume(); } catch (e) { } }
-    eqPre.gain.value = 1;                  /* 复位preamp(此前可能被导入预设改过致串味) */
+    const RGX = [31.5,63,125,250,500,1000,2000,4000,8000,16000], bk = {};   /* 与mergePamp同规则:倍频程分区正增益求和 */
+    vals.forEach((g, i) => { if (g <= 0) return; let best = RGX[0], bd = 1e9; RGX.forEach(c => { const dd = Math.abs(Math.log2(EQ_BANDS[i] / c)); if (dd < bd) { bd = dd; best = c; } }); bk[best] = (bk[best] || 0) + g; });
+    const rmax = Object.keys(bk).length ? Math.max.apply(null, Object.values(bk)) : 0;
+    eqPre.gain.value = Math.pow(10, -Math.max(0, rmax - 10) * 0.55 / 20);   /* v3.70:分区超+10dB折算负preamp防削波(修复内置中文预设无防削波致音质丢失),全零预设=1不变 */
     eqFilters.forEach((f, i) => {
       if (i < vals.length) { f.type = 'peaking'; f.frequency.value = EQ_BANDS[i]; f.Q.value = 1.1; setFader(f, 'gain', clampDb(vals[i])); }
       else { f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; setFader(f, 'gain', 0); }
