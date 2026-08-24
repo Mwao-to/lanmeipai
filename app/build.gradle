@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 100
-        versionName '3.86'   // ①校验弹窗精简:只测关键三项(歌曲播放含下载可达/歌词/封面),输出简单易懂,标题'音源校验·文件名'长名缩略显示②禁止重复导入:SAF导入先读入内存算SHA-256与sources目录逐文件比对,内容相同拒收回执dup提醒;>8MB拒收③HTML静态加密:APK内不再有明文——assets仅打包index.bin(build.gradle packEncryptedHtml构建期加密+sourceSets排除明文),dex内EMBEDDED_HTML→EMBEDDED_ENC密文;算法keystream=SHA256(KEY‖u32be(block))异或,三端同构(Java/Python/Node),运行时解密~200KB<10ms零性能损耗;仓库保留唯一明文源assets/index.html供编辑/测试
+        versionCode 101
+        versionName '3.87'   // 修复v3.86加密遗漏:AGP的assets.excludes对mergeAssets不生效致明文index.html仍随包→明文源移至app/htmlsrc/(不在assets目录,物理上不可能进APK),packEncryptedHtml改读htmlsrc生成index.bin;测试桩新增htmlsrc断言共37项
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
@@ -49,21 +49,14 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    // v3.86:APK 内不打包明文 index.html(仅加密后的 index.bin 随包)
-    sourceSets {
-        main {
-            assets {
-                excludes += ['index.html']
-            }
-        }
-    }
+    // v3.86:明文源已移至 app/htmlsrc/(不参与打包),assets 内仅构建期生成的加密 index.bin
 }
 
 // ═══ 构建期打包:assets/index.html(仓库内唯一明文源) → index.bin 加密产物 ═══
 // 算法与 MainActivity.xorDecrypt / tools/crypt_html.py 同构: keystream[i]=SHA256(KEY‖u32be(block)) 异或
 // APK 中不再存在明文 HTML(dex 内的 EMBEDDED_ENC 也是同算法密文),运行时解密 ~200KB <10ms 无性能损耗
 tasks.register('packEncryptedHtml') {
-    def srcFile = file('src/main/assets/index.html')
+    def srcFile = file('htmlsrc/index.html')
     def dstFile = file('src/main/assets/index.bin')
     inputs.file(srcFile)
     outputs.file(dstFile)

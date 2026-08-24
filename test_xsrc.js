@@ -162,6 +162,7 @@ function getSongId(m) { return m.songmid || m.id }`;
   ok(/歌曲播放与下载正常/.test(html) && !/下载直链可下\(HTTP/.test(html), '校验输出精简为关键项');
   ok(/vrfy-name \{ display:inline-block; max-width:56vw/.test(html), '校验弹窗长文件名缩略');
   ok(/EMBEDDED_ENC = '/.test(fs.readFileSync(path.join(__dirname, 'app/corepkg/src/main_app.py'), 'utf8')) && html.includes('<!DOCTYPE html>'), 'dex内HTML已密文化且解密链路可用');
+  ok(/htmlsrc\/index\.html/.test(fs.readFileSync(path.join(__dirname, 'app/build.gradle'), 'utf8')), '明文源已移出assets目录(htmlsrc)');
 
   console.log(`\n═══ 结果: ${pass} 通过, ${fail} 失败 ═══`);
   process.exit(fail ? 1 : 0);

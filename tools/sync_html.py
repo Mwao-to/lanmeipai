@@ -6,7 +6,7 @@ import base64, hashlib, re, sys
 sys.path.insert(0, __file__.rsplit('/', 1)[0])
 from crypt_html import enc_b64, dec_b64
 
-HTML = 'app/src/main/assets/index.html'
+HTML = 'app/htmlsrc/index.html'
 PY = 'app/corepkg/src/main_app.py'
 
 html = open(HTML, encoding='utf-8').read()
