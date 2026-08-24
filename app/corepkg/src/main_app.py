@@ -2739,29 +2739,47 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   }
   @media (hover:hover) { .quick-bar button:hover { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.1); } }
   .quick-bar button svg { display:block; margin:0 auto; }   /* v3.70:A/B/C改SVG图标按钮,直读意境 */
-  /* ═══ D键·自定义音源弹窗(v3.71):复用modal体系,行卡片+开关+校验 ═══ */
+  /* ═══ D键·自定义音源弹窗(v3.72):行卡片统一高度,右上角[校验|删除],右侧居中开关,单行跑马灯 ═══ */
   .srcbox { width:min(92vw,560px); }
-  .src-status { font-size:11px; color:var(--muted); margin:6px 2px 8px; font-family:var(--mono); }
+  .src-statusrow { display:none; align-items:flex-end; gap:10px; margin:4px 0 10px; }
+  .src-status { flex:1; min-width:0; font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.45; }
   .src-status.on { color:#7ee787; }
-  .src-listbox { max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; flex-direction:column; gap:8px; padding-right:2px; }
-  .src-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:var(--r-md); background:var(--glass-thin); border:1px solid var(--glass-border); }
-  .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }
-  .src-info { flex:1; min-width:0; }
-  .src-name { font-size:13px; color:var(--text-bright); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .src-meta { font-size:10px; color:var(--muted); margin-top:3px; line-height:1.5; word-break:break-all; }
-  .src-vres { font-size:10px; margin-top:4px; color:var(--muted); line-height:1.5; white-space:pre-wrap; }
-  .switch { position:relative; width:40px; height:22px; flex-shrink:0; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }
+  .src-import-sm { flex-shrink:0; width:auto; margin:0; padding:8px 14px; font-size:11px; }
+  .src-listbox { max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch; display:none; flex-direction:column; gap:8px; scrollbar-width:none; }
+  .src-listbox::-webkit-scrollbar { display:none; }          /* v3.72:去拖动条 */
+  .src-item { position:relative; box-sizing:border-box; min-height:70px; padding:9px 64px 9px 12px; border-radius:var(--r-md); background:var(--glass-thin); border:1px solid var(--glass-border); }
+  .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }   /* 仅变色不改尺寸,行高统一 */
+  .src-namebox { margin-right:104px; }                        /* 给右上角[校验][删除]让位 */
+  .src-metabox { margin-top:5px; }
+  .src-mq { overflow:hidden; white-space:nowrap; }
+  .src-mq > span { display:inline-block; will-change:transform; }
+  .src-mq.run > span { animation:srcMq var(--mq-dur,8s) linear infinite alternate; }
+  @keyframes srcMq { from{transform:translateX(0)} to{transform:translateX(var(--mq-shift,-40px))} }
+  .src-name { font-size:13px; color:var(--text-bright); line-height:1.5; }
+  .src-meta { font-size:10px; color:var(--muted); line-height:1.5; }
+  .src-topbtns { position:absolute; top:7px; right:8px; display:flex; gap:6px; }
+  .src-btn { flex-shrink:0; font-size:10px; padding:3px 9px; border-radius:7px; border:1px solid var(--glass-border); background:rgba(255,255,255,.06); color:var(--text-bright); cursor:pointer; font-family:var(--mono); line-height:1.5; transition:border-color .15s ease; }
+  .src-btn.del { color:#ff7b72; }
+  .switch { position:absolute; right:10px; top:calc(50% + 8px); transform:translateY(-50%); width:40px; height:22px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }
   .switch::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
   .switch.on { background:rgba(236,65,65,.55); }
   .switch.on::after { transform:translateX(18px); background:#fff; }
-  .src-btn { flex-shrink:0; font-size:10px; padding:5px 9px; border-radius:8px; border:1px solid var(--glass-border); background:rgba(255,255,255,.05); color:var(--text-bright); cursor:pointer; font-family:var(--mono); transition:border-color .15s ease, color .15s ease; }
-  .src-btn.del { color:#ff7b72; min-width:34px; }
   .src-empty { text-align:center; padding:34px 0 26px; display:none; }
   .src-empty-txt { font-size:12px; color:var(--muted); margin-bottom:14px; }
   .src-empty-sub { font-size:10px; color:var(--muted); opacity:.7; margin-top:10px; }
-  .src-foot { display:flex; align-items:center; gap:10px; margin-top:12px; }
-  .src-foot .modal-btn { flex-shrink:0; width:auto; padding:9px 16px; margin:0; }
-  .src-hint { font-size:10px; color:var(--muted); opacity:.75; line-height:1.5; }
+  /* 校验进行/报告弹窗(v3.72):实时日志+完成汇总,随时可关闭返回管理列表 */
+  .vrfybox { width:min(88vw,480px); }
+  .vrfy-log { max-height:36vh; overflow-y:auto; font-family:var(--mono); font-size:11px; line-height:1.75; color:var(--muted); background:rgba(0,0,0,.25); border-radius:var(--r-md); padding:10px 12px; scrollbar-width:none; word-break:break-all; }
+  .vrfy-log::-webkit-scrollbar { display:none; }
+  .vrfy-log .ok { color:#7ee787; }
+  .vrfy-log .bad { color:#ff7b72; }
+  .vrfy-log .dim { opacity:.62; }
+  .vrfy-sum { margin-top:10px; font-size:12px; font-family:var(--mono); line-height:1.7; }
+  /* 通用确认弹窗(v3.72):确认/取消双选 */
+  .cfmbox { width:min(82vw,360px); }
+  .cfm-msg { font-size:12px; color:var(--muted); line-height:1.7; margin:12px 0 18px; word-break:break-all; white-space:pre-line; }
+  .cfm-btns { display:flex; gap:10px; }
+  .cfm-btns .modal-btn { flex:1; width:auto; margin:0; padding:10px 0; }
   .quick-bar button:active { transform:scale(.9); }   /* 弹性按压,与全站一致 */
 
   /* ═══ A键·扫码登录弹窗(布局同下载弹窗,内容专属) ═══ */
@@ -3104,21 +3122,43 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   </div>
 </div>
 
-<!-- ═══ D键·自定义音源管理弹窗(v3.71):布局同下载弹窗(modal-mask/modal-box体系),内含滚动列表+开关+校验 ═══ -->
+<!-- ═══ D键·自定义音源管理弹窗(v3.72):空态居中导入;有文件后策略行左字右下角小导入钮,行卡片统一高度 ═══ -->
 <div class="modal-mask" id="srcModal">
   <div class="modal-box srcbox">
     <button class="modal-x" onclick="closeSrcModal()" title="关闭">○</button>
     <div class="modal-title">音源 · 自定义第三方源</div>
-    <div class="src-status" id="srcActiveTip">当前策略：内置三通道（官方接口 → 第三方解析 → Cookie兑底）</div>
+    <div class="src-statusrow" id="srcStatusRow">
+      <div class="src-status" id="srcActiveTip">当前策略：内置三通道（官方接口 → 第三方解析 → Cookie兑底）</div>
+      <button class="modal-btn secondary src-import-sm" onclick="srcPickImport()">导入音源文件</button>
+    </div>
     <div class="src-listbox" id="srcListBox"></div>
     <div class="src-empty" id="srcEmpty">
       <div class="src-empty-txt">尚未配置任何音源文件</div>
       <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">导入自定义第三方音源</button>
       <div class="src-empty-sub">支持洛雪(LX)协议音源脚本 · 存于应用私有目录 · 卸载即清</div>
     </div>
-    <div class="src-foot" id="srcFoot">
-      <button class="modal-btn secondary" onclick="srcPickImport()">导入音源文件</button>
-      <span class="src-hint">开关＝全局启用（独占接管歌曲/歌词/图片/下载，其余三通道停用）<br>校验＝检测各接口可用性 · ✕＝删除（含私有副本）</span>
+  </div>
+</div>
+
+<!-- ═══ 音源校验进行/报告弹窗(v3.72):实时过程日志,完成显示结果汇总,随时可关回管理列表 ═══ -->
+<div class="modal-mask" id="vrfyModal">
+  <div class="modal-box vrfybox">
+    <button class="modal-x" onclick="closeVrfyModal()" title="关闭">○</button>
+    <div class="modal-title">音源校验 · <span id="vrfyName"></span></div>
+    <div class="vrfy-log" id="vrfyLog"></div>
+    <div class="vrfy-sum" id="vrfySum" style="display:none"></div>
+    <button class="modal-btn secondary" style="margin-top:12px" onclick="closeVrfyModal()">关闭</button>
+  </div>
+</div>
+
+<!-- ═══ 通用确认弹窗(v3.72):确认/取消双选(替代两段式按钮) ═══ -->
+<div class="modal-mask" id="cfmModal">
+  <div class="modal-box cfmbox">
+    <div class="modal-title" id="cfmTitle">确认操作</div>
+    <div class="cfm-msg" id="cfmMsg"></div>
+    <div class="cfm-btns">
+      <button class="modal-btn secondary" onclick="closeCfm(false)">取消</button>
+      <button class="modal-btn" style="background:rgba(236,65,65,.78)" onclick="closeCfm(true)">确认删除</button>
     </div>
   </div>
 </div>
@@ -3546,19 +3586,29 @@ function toggleXsrc(fileName) {                 /* 独占切换:单槽天然保�
   toast('正在启用音源并更新全局策略…', 'info', 1500);
   loadXsrc(fileName, code, false).then(() => renderSrcList());
 }
-function deleteXsrc(fileName, btn) {            /* 两段式确认删除(含私有副本) */
-  if (btn && btn.dataset.arm !== '1') {
-    btn.dataset.arm = '1'; btn.textContent = '确认?';
-    setTimeout(() => { if (btn.isConnected) { btn.dataset.arm = ''; btn.textContent = '✕'; } }, 2600);
-    return;
-  }
-  if (!bridgeCall('srcDelete', fileName)) { toast('删除失败', 'error'); return; }
-  const wasActive = xsrcHandler && xsrcHandler.file === fileName;
-  if (wasActive) stopXsrc(false); else updateXsrcTip();
-  delete xsrcMeta[fileName];
-  localStorage.removeItem('xsrc_verify_' + fileName);
-  toast('音源「' + fileName + '」已删除（含私有目录副本）', 'success', 2800);
-  renderSrcList();
+/* 通用确认弹窗(v3.72):确认/取消双选,替代行内两段式按钮 */
+let cfmCb = null;
+function askConfirm(title, msg, cb) {
+  $('cfmTitle').textContent = title;
+  $('cfmMsg').textContent = msg;
+  cfmCb = cb;
+  $('cfmModal').classList.add('show');
+}
+function closeCfm(yes) {
+  $('cfmModal').classList.remove('show');
+  const cb = cfmCb; cfmCb = null;
+  if (yes && cb) cb();
+}
+$('cfmModal').addEventListener('click', e => { if (e.target.id === 'cfmModal') closeCfm(false); });
+function deleteXsrc(fileName) {                 /* 确认弹窗删除(含私有副本) */
+  const activeHere = xsrcHandler && xsrcHandler.file === fileName;
+  askConfirm('删除音源', '确认删除「' + fileName + '」？\n将同时移除私有目录中的副本' + (activeHere ? '，并停用当前启用的音源。' : '。'), () => {
+    if (!bridgeCall('srcDelete', fileName)) { toast('删除失败', 'error'); return; }
+    if (activeHere) stopXsrc(false); else updateXsrcTip();
+    delete xsrcMeta[fileName];
+    toast('音源「' + fileName + '」已删除（含私有目录副本）', 'success', 2800);
+    renderSrcList();
+  });
 }
 function xsrcCallOn(ctx, action, song, quality) { /* 固定wy平台(本App曲库),超时保护 */
   if (!ctx || !ctx.handler) return Promise.reject(new Error('音源不可用'));
@@ -3591,39 +3641,63 @@ async function adaptCheckXsrc(fileName) {
   renderSrcList();
 }
 /* 校验:歌曲链接/下载/歌词/图片逐项探活+平台清单,废弃接口标记;toast汇总+行内详情 */
-async function verifyXsrc(fileName) {
-  const row = document.querySelector('[data-srcfile="' + CSS.escape(fileName) + '"] .src-vres');
-  const setRes = t => { if (row) row.textContent = t; };
-  setRes('校验中… 请稍候');
+/* 校验独立弹窗(v3.72):点击即开窗显示实时过程日志,完成出报告;随时关闭返回管理列表 */
+let vrfyAbort = false;
+function openVrfyModal(fileName) {
+  $('vrfyName').textContent = fileName;
+  $('vrfyLog').innerHTML = '';
+  const sum = $('vrfySum');
+  sum.style.display = 'none'; sum.textContent = '';
+  vrfyAbort = false;
+  $('vrfyModal').classList.add('show');
+  runVerify(fileName);
+}
+function closeVrfyModal() { vrfyAbort = true; $('vrfyModal').classList.remove('show'); }
+$('vrfyModal').addEventListener('click', e => { if (e.target.id === 'vrfyModal') closeVrfyModal(); });
+function vLog(txt, cls) {
+  const log = $('vrfyLog');
+  if (!log) return;
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = txt;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+async function runVerify(fileName) {
   const wasActive = xsrcHandler && xsrcHandler.file === fileName;
-  const ctx = wasActive ? xsrcHandler : await runXsrc(fileName, bridgeCall('srcRead', fileName) || '', false);
-  if (!ctx || ctx.fail) { setRes('✗ 校验失败：音源无法运行'); toast('校验失败：音源无法运行', 'error', 3000); return; }
+  vLog('开始校验「' + fileName + '」…', 'dim');
+  vLog(wasActive ? '使用当前启用中的实例' : '临时加载脚本（不影响全局策略）…', 'dim');
+  let ctx = null;
+  try { ctx = wasActive ? xsrcHandler : await runXsrc(fileName, bridgeCall('srcRead', fileName) || '', false); } catch (e) { }
+  if (!ctx || ctx.fail) { vLog('✗ 音源无法运行：' + ((ctx && ctx.fail) || '加载异常'), 'bad'); return finishVrfy(0, 1, wasActive); }
+  vLog('✓ 协议握手成功 · 平台 ' + Object.keys(ctx.sources).length + ' 个 · 接口 ' + [...ctx.actions].join('/'), 'ok');
   const probe = (state.song && state.song.songmid) ? state.song : { songmid: '5257138', name: '屋顶', singer: '周杰伦' };
-  const lines = [];
-  const check = async fnLabel => { try { return await fnLabel(); } catch (e) { return '✗ 废弃/不可用（' + String(e.message || e).slice(0, 40) + '）'; } };
+  let good = 0, bad = 0;
+  const step = async label => {
+    if (vrfyAbort) throw new Error('__abort__');
+    const t0 = Date.now();
+    try { const r = await label(); vLog('✓ ' + r + '（' + (Date.now() - t0) + 'ms）', 'ok'); good++; }
+    catch (e) { if (e.message === '__abort__') throw e; vLog('✗ 废弃/不可用：' + String(e.message || e).slice(0, 60), 'bad'); bad++; }
+  };
   let url = '';
-  lines.push('歌曲链接: ' + await check(async () => {
-    url = String(await xsrcCallOn(ctx, 'musicUrl', probe, '128k'));
-    if (!/^https?:\/\//i.test(url)) throw new Error('返回非直链');
-    return '✓ 可用';
-  }));
-  lines.push('歌曲下载: ' + (/^https?:\/\//.test(url) ? '✓ 直链可下（交原生下载器）' : '✗ 无可用直链'));
-  if (ctx.actions.has('lyric')) lines.push('歌词: ' + await check(async () => {
-    const t = await xsrcCallOn(ctx, 'lyric', probe);
-    const s = typeof t === 'string' ? t : String((t && t.lyric) || '');
-    if (!s.trim()) throw new Error('空内容');
-    return '✓ 可用';
-  })); else lines.push('歌词: － 未声明此接口');
-  if (ctx.actions.has('pic')) lines.push('图片: ' + await check(async () => {
-    const u = String(await xsrcCallOn(ctx, 'pic', probe, '128k'));
-    if (!/^https?:\/\//i.test(u)) throw new Error('返回非直链');
-    return '✓ 可用';
-  })); else lines.push('图片: － 未声明此接口');
-  lines.push('平台清单: ' + Object.keys(ctx.sources).map(k => k + '(' + (ctx.sources[k].actions || []).join(',') + ')').join(' '));
-  const good = lines.filter(l => l.includes('✓')).length, bad = lines.filter(l => l.includes('✗')).length;
-  setRes(lines.join('\n'));
-  localStorage.setItem('xsrc_verify_' + fileName, lines.join('\n'));
-  toast('校验完成: ' + good + '项可用' + (bad ? ', ' + bad + '项废弃/异常' : '') + (wasActive ? '（当前启用中）' : ''), bad ? 'warn' : 'success', 3800);
+  try {
+    await step(async () => { url = String(await xsrcCallOn(ctx, 'musicUrl', probe, '128k')); if (!/^https?:\/\//i.test(url)) throw new Error('返回非直链'); return '歌曲链接可用'; });
+    await step(async () => { if (!/^https?:\/\//.test(url)) throw new Error('无可用直链'); return '下载直链可下'; });
+    if (ctx.actions.has('lyric')) await step(async () => { const t = await xsrcCallOn(ctx, 'lyric', probe); const s = typeof t === 'string' ? t : String((t && t.lyric) || ''); if (!s.trim()) throw new Error('空内容'); return '歌词接口可用'; });
+    else vLog('－ 歌词接口未声明', 'dim');
+    if (ctx.actions.has('pic')) await step(async () => { const u = String(await xsrcCallOn(ctx, 'pic', probe, '128k')); if (!/^https?:\/\//i.test(u)) throw new Error('返回非直链'); return '图片接口可用'; });
+    else vLog('－ 图片接口未声明', 'dim');
+  } catch (e) { if (e.message !== '__abort__') { vLog('✗ 异常中断：' + String(e.message || e).slice(0, 60), 'bad'); bad++; } }
+  if (!vrfyAbort) Object.keys(ctx.sources).forEach(k => vLog('· 平台 ' + k + '：' + (ctx.sources[k].actions || []).join(','), 'dim'));
+  finishVrfy(good, bad, wasActive);
+}
+function finishVrfy(good, bad, wasActive) {
+  if (vrfyAbort) return;
+  const sum = $('vrfySum');
+  sum.style.display = 'block';
+  sum.innerHTML = '<span style="color:' + (bad ? '#ffb86b' : '#7ee787') + '">校验完成：' + good + ' 项可用' + (bad ? '，' + bad + ' 项废弃/异常' : '') + '</span>' +
+    '<br><span style="font-size:10px;color:var(--muted)">' + (wasActive ? '该音源当前启用中。可关闭本窗继续管理其他音源。' : '如需启用请回到列表打开开关；可关闭本窗继续操作。') + '</span>';
+  toast('校验完成：' + good + '项可用' + (bad ? '，' + bad + '项废弃' : ''), bad ? 'warn' : 'success', 3000);
 }
 function updateXsrcTip() {
   const tip = $('srcActiveTip');
@@ -3631,30 +3705,47 @@ function updateXsrcTip() {
   if (xsrcHandler) { tip.textContent = '当前策略：音源「' + xsrcHandler.name + '」全局接管中（官方/第三方/Cookie 已停用）'; tip.classList.add('on'); }
   else { tip.textContent = '当前策略：内置三通道（官方接口 → 第三方解析 → Cookie兑底）'; tip.classList.remove('on'); }
 }
+function initSrcMq(scope) {                     /* 单行溢出自动跑马灯(v3.72) */
+  scope.querySelectorAll('.src-mq').forEach(el => {
+    const sp = el.firstChild;
+    if (!sp) return;
+    el.classList.remove('run');
+    const diff = sp.scrollWidth - el.clientWidth;
+    if (diff > 4) {
+      el.style.setProperty('--mq-shift', -(diff + 12) + 'px');
+      el.style.setProperty('--mq-dur', Math.max(4, Math.min(14, diff / 16)) + 's');
+      void el.offsetWidth;
+      el.classList.add('run');
+    }
+  });
+}
 function renderSrcList() {
   let files = [];
   try { files = JSON.parse(bridgeCall('srcList') || '[]'); } catch (e) { }
-  const box = $('srcListBox'), empty = $('srcEmpty'), foot = $('srcFoot');
+  const box = $('srcListBox'), empty = $('srcEmpty'), srow = $('srcStatusRow');
   if (!box) return;
   empty.style.display = files.length ? 'none' : 'block';
-  foot.style.display = files.length ? 'flex' : 'none';
+  if (srow) srow.style.display = files.length ? 'flex' : 'none';   /* 有文件才显示策略行+右下角导入钮 */
   box.style.display = files.length ? 'flex' : 'none';
   updateXsrcTip();
   box.innerHTML = files.map(f => {
     const act = xsrcHandler && xsrcHandler.file === f.name;
     let m = xsrcMeta[f.name];
     if (!m) m = xsrcMeta[f.name] = analyzeXsrcCode(bridgeCall('srcRead', f.name) || '', f.name);
-    const vr = localStorage.getItem('xsrc_verify_' + f.name);
     const jsName = escAttr(f.name).replace(/'/g, "\\'");
+    /* 精简为一行元信息(跑马灯适配),不再展示长描述 */
+    const metaLine = [m.version ? 'v' + m.version : '', m.author || '', [...m.actions].join('/'), m.platforms.length ? '平台 ' + m.platforms.join(',') : '']
+      .filter(Boolean).join(' · ') || f.name;
     return '<div class="src-item' + (act ? ' active' : '') + '" data-srcfile="' + escAttr(f.name) + '">' +
-      '<button class="src-btn del" onclick="deleteXsrc(\'' + jsName + '\',this)">✕</button>' +
-      '<div class="src-info"><div class="src-name">' + esc(m.name) + (act ? ' <span style="color:#7ee787">● 启用中</span>' : '') + '</div>' +
-      '<div class="src-meta">' + (m.version ? 'v' + esc(m.version) + ' · ' : '') + esc(m.author || '未知作者') + ' · ' + Math.max(1, Math.round(f.size / 1024)) + 'KB<br>' +
-      esc((m.desc || '').slice(0, 60)) + '<br>支持: ' + [...m.actions].join('/') + ' · 平台: ' + (m.platforms.join(',') || '-') + '</div>' +
-      (vr ? '<div class="src-vres">' + esc(vr) + '</div>' : '') + '</div>' +
-      '<button class="src-btn" onclick="verifyXsrc(\'' + jsName + '\')">校验</button>' +
+      '<div class="src-topbtns">' +
+      '<button class="src-btn" onclick="openVrfyModal(\'' + jsName + '\')">校验</button>' +
+      '<button class="src-btn del" onclick="deleteXsrc(\'' + jsName + '\')">删除</button>' +
+      '</div>' +
+      '<div class="src-namebox"><div class="src-name src-mq"><span>' + esc(m.name || f.name) + '</span></div></div>' +
+      '<div class="src-metabox"><div class="src-meta src-mq"><span>' + esc(metaLine) + '</span></div></div>' +
       '<div class="switch' + (act ? ' on' : '') + '" onclick="toggleXsrc(\'' + jsName + '\')"></div></div>';
   }).join('');
+  initSrcMq(box);
 }
 (function restoreXsrc() {                      /* 冷启动恢复:上次启用的音源静默重载 */
   try {

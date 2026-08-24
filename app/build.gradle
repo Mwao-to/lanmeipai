@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 85
-        versionName '3.71'   // ①五键外框容器改全透明(按钮自身边框不动)②D键=自定义音源管理:LX洛雪协议适配(globalThis.lx垫片+inited握手+xhttp代理绕CORS),SAF选文件导入→适配检查(失败自动清理)→私有目录sources/持久化→开关独占启用全局接管取链/歌词/封面/下载并停用官方/第三方/Cookie三通道,停用实时恢复;校验逐项探活歌曲/下载/歌词/图片+平台清单,废弃接口标记;删除含私有副本,冷启动静默恢复上次启用
+        versionCode 86
+        versionName '3.72'   // ①D键音源弹窗布局重构:行卡片统一70px高,音源名左上角+元信息一行跑马灯(去长描述),[校验|删除]右上角统一尺寸,滑动开关右侧居中,启用态仅变色不改尺寸,隐藏滚动条,多文件不溢出不叠加②导入钮移至策略行右下角,删除底部提示文案③校验改独立弹窗:点击即开窗实时日志逐项计时,完成出报告可关闭返回④删除改确认弹窗(确认/取消双选)替代两段式按钮
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
