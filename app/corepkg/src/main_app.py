@@ -2649,20 +2649,6 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .eq-row.on .eq-name { color:var(--accent-hover); font-weight:700; }
   .eq-mark { margin-left:auto; flex-shrink:0; font-family:var(--mono); font-size:10.1px; color:#55555c; }   /* ㉿标记,字号与名称统一 */
   .eq-row.on .eq-mark { color:var(--accent-hover); }
-  /* 手动十段:两行×5根竖向滑杆(中线0dB原点,圆点拇指,双向进度填充) */
-  .eq-man { display:none; margin-top:10px; padding:8px 6px; border:1px solid var(--glass-border);
-    border-radius:var(--r-md); background:rgba(255,255,255,.04); box-sizing:border-box; }
-  .eq-man.on { display:block; }
-  .eq-vrow { display:flex; justify-content:space-between; margin-bottom:8px; }
-  .eq-vrow:last-child { margin-bottom:0; }
-  .eq-vcol { display:flex; flex-direction:column; align-items:center; gap:3px; flex:1; min-width:0; }
-  .eq-mval { font-family:var(--mono); font-size:8.5px; color:var(--accent-hover); line-height:1; }
-  .eq-vtrack { position:relative; width:20px; height:86px; border-radius:10px;
-    background:rgba(255,255,255,.09); overflow:hidden; cursor:pointer; touch-action:none; }
-  .eq-vfill { position:absolute; left:5px; right:5px; background:rgba(236,65,65,.6); border-radius:4px; }
-  .eq-vthumb { position:absolute; left:50%; transform:translate(-50%,-50%); width:14px; height:14px;
-    border-radius:50%; background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.45); pointer-events:none; }
-  .eq-vlab { font-family:var(--mono); font-size:8.5px; color:var(--muted); line-height:1; }
 
   /* ═══ 五键快捷条:双栏列表正下方 ═══
    * 外层容器观感对齐主列表(.panel):同圆角(--r-md)、同底色透明度(--glass-regular);
@@ -3026,7 +3012,6 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   <div class="modal-box eqbox">
     <button class="modal-x" onclick="closeEqModal()" title="关闭">○</button>
     <div class="modal-title">音效 · EQ (内置)</div>
-    <div class="eq-man" id="eqMan"></div>
     <div class="eq-list" id="eqList"></div>
   </div>
 </div>
@@ -4276,25 +4261,14 @@ function bandToNode(f, b) {                /* PowerAMP band→BiquadFilter:0=低
 let eqCtx = null, eqFilters = null, eqPre = null, eqTail = null;
 let eqActiveName = '正常';
 let pendingAutoEq = null;                  // 启动待自动沿用的预设(非「正常」才有值)
-const MANUAL_BANDS = [31,62,125,250,500,1000,2000,4000,8000,16000];   // ISO标准十段(补全31~16k全域)
-let EQ_MANUAL = [0,0,0,0,0,0,0,0,0,0];        // 手动十段当前dB值
-const isEqKey = n => n === '手动十段' || !!EQ_PRESETS[n] || !!EQ_IMPORTED[n];
 (function restoreEq() {                    // 恢复上次预设:私有目录eqw.json优先,localStorage兑底
-  try {
-    const ls = localStorage.getItem('eqPreset');
-    if (ls && isEqKey(ls)) {
-      eqActiveName = ls;
-      try { const ms = localStorage.getItem('eqManual'); if (ms) { const a = JSON.parse(ms); if (Array.isArray(a) && a.length === 10) EQ_MANUAL = a.map(v => Math.max(-6, Math.min(6, Number(v) || 0))); } } catch (e) { }
-    }
-  } catch (e) { }
+  try { const ls = localStorage.getItem('eqPreset'); if (ls && (EQ_PRESETS[ls] || EQ_IMPORTED[ls])) eqActiveName = ls; } catch (e) { }
   try {
     const s = window.AndroidBridge && AndroidBridge.eqLoad ? AndroidBridge.eqLoad() : '';
     if (s) {
       const o = JSON.parse(s);
-      if (o && o.preset && isEqKey(o.preset)) {
+      if (o && o.preset && (EQ_PRESETS[o.preset] || EQ_IMPORTED[o.preset])) {
         eqActiveName = o.preset;
-        if (o.preset === '手动十段' && Array.isArray(o.manual) && o.manual.length === 10)
-          EQ_MANUAL = o.manual.map(v => Math.max(-6, Math.min(6, Number(v) || 0)));   // 文件优先覆盖滑杆存档
         localStorage.setItem('eqPreset', o.preset);
       }
     }
@@ -4305,81 +4279,8 @@ const isEqKey = n => n === '手动十段' || !!EQ_PRESETS[n] || !!EQ_IMPORTED[n]
     setTimeout(() => toast(`当前使用EQ：${eqDisplay(eqActiveName)}，已生效`, 'success', 2600), 600);
   }
 })();
-function fillManualChain() {               // 把EQ_MANUAL写入前10节(ISO频点Q1.1),多余节扁平化
-  eqPre.gain.value = 1;
-  eqFilters.forEach((f, i) => {
-    if (i < MANUAL_BANDS.length) { f.type = 'peaking'; f.frequency.value = MANUAL_BANDS[i]; f.Q.value = 1.1; f.gain.value = clampDb(EQ_MANUAL[i]); }
-    else { f.type = 'peaking'; f.frequency.value = 1000; f.Q.value = 1; f.gain.value = 0; }
-  });
-}
-async function applyManualEq() {
-  pendingAutoEq = null;
-  if (!ensureEqChain(MANUAL_BANDS.length)) return;
-  try { if (eqCtx.state === 'suspended') await eqCtx.resume(); } catch (e) { }
-  fillManualChain();
-  eqActiveName = '手动十段';
-  localStorage.setItem('eqPreset', '手动十段');
-  try { localStorage.setItem('eqManual', JSON.stringify(EQ_MANUAL)); } catch (e) { }
-  if (window.AndroidBridge && AndroidBridge.eqSave) AndroidBridge.eqSave(JSON.stringify({ preset: '手动十段', manual: EQ_MANUAL }));
-  renderEqList();
-  toast('已应用EQ：手动十段', 'success');
-}
-function paintManualBand(i) {              // 按EQ_MANUAL[i]重画竖条:中线起双向进度填充+圆点位置
-  const col = document.getElementById('eqVc' + i);
-  if (!col) return;
-  const p = EQ_MANUAL[i] / 6;              // -1..1
-  const fill = col.querySelector('.eq-vfill'), th = col.querySelector('.eq-vthumb');
-  if (fill) {
-    if (p >= 0) { fill.style.top = (50 - p * 50) + '%'; fill.style.height = (p * 50) + '%'; }
-    else { fill.style.top = '50%'; fill.style.height = (-p * 50) + '%'; }
-  }
-  if (th) th.style.top = (50 - p * 50) + '%';
-  const v = col.querySelector('.eq-mval');
-  if (v) v.textContent = (EQ_MANUAL[i] > 0 ? '+' : '') + EQ_MANUAL[i];
-}
-function setManualBand(i, db) {            // 拖动实时改对应单节增益(选中态下)
-  EQ_MANUAL[i] = Math.max(-6, Math.min(6, Math.round(Number(db) || 0)));
-  paintManualBand(i);
-  if (eqActiveName === '手动十段' && eqFilters && eqFilters[i]) eqFilters[i].gain.value = clampDb(EQ_MANUAL[i]);
-}
-function renderManualPanel() {             // 两行×5根竖向圆点滑杆:上行31~500Hz,下行1k~16k;触点位置直接换算dB
-  const mk = (f, i) => {
-    const lab = f >= 1000 ? (f / 1000) + 'k' : '' + f;
-    return `<div class="eq-vcol" id="eqVc${i}">`
-      + `<span class="eq-mval">${EQ_MANUAL[i] > 0 ? '+' : ''}${EQ_MANUAL[i]}</span>`
-      + `<div class="eq-vtrack"><i class="eq-vfill"></i><b class="eq-vthumb"></b></div>`
-      + `<span class="eq-vlab">${lab}</span></div>`;
-  };
-  $('eqMan').innerHTML =
-    '<div class="eq-vrow">' + MANUAL_BANDS.slice(0, 5).map((f, j) => mk(f, j)).join('') + '</div>'
-    + '<div class="eq-vrow">' + MANUAL_BANDS.slice(5).map((f, j) => mk(f, j + 5)).join('') + '</div>';
-  MANUAL_BANDS.forEach((f, i) => {
-    const tr = document.querySelector('#eqVc' + i + ' .eq-vtrack');
-    if (!tr) return;
-    const upd = y => {
-      const r = tr.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, 1 - (y - r.top) / r.height));   // 顶=+1 底=-1
-      setManualBand(i, Math.round((ratio - 0.5) * 12));                     // 映射±6dB
-    };
-    tr.addEventListener('touchstart', e => upd(e.touches[0].clientY), { passive: true });
-    tr.addEventListener('touchmove', e => upd(e.touches[0].clientY), { passive: true });
-    tr.addEventListener('mousedown', e => upd(e.clientY));
-    tr.addEventListener('mousemove', e => { if (e.buttons) upd(e.clientY); });
-  });
-  for (let i = 0; i < MANUAL_BANDS.length; i++) paintManualBand(i);
-}
-function openManualUi() {                  // 点击「手动十段」行:展开滑杆面板并按当前值生效
-  renderManualPanel();
-  applyManualEq();
-}
 function maybeAutoBuildEq() {              // 播放路径上确保启动遗留的自动预设链就绪并填参
   if (!pendingAutoEq || eqCtx) return;
-  if (pendingAutoEq === '手动十段') {      // 启动自动沿用:手动十段按存档滑杆值静默填参
-    if (!ensureEqChain(MANUAL_BANDS.length)) { pendingAutoEq = null; return; }
-    fillManualChain();
-    pendingAutoEq = null; renderEqList();
-    return;
-  }
   const imp = EQ_IMPORTED[pendingAutoEq];
   if (imp) {                               // 导入预设:动态链+preamp静默填参
     if (!ensureEqChain(imp.bands.length)) { pendingAutoEq = null; return; }
@@ -4439,7 +4340,6 @@ function ensureEqChain(n) {                // n=所需Biquad节数;已建链则�
   }
 }
 async function applyEq(name) {
-  if (name === '手动十段') { openManualUi(); return; }   // 置顶特殊项路由
   const imp = EQ_IMPORTED[name];
   if (imp) {                               // PowerAMP导入预设:动态Biquad链+preamp实时生效
     pendingAutoEq = null;
@@ -4471,17 +4371,12 @@ async function applyEq(name) {
   toast(name === '正常' ? '已恢复正常播放(EQ已清除)' : `已应用EQ：${name}`, 'success');
 }
 let EQ_ORDER = [];
-function renderEqList() {                  // 「手动十段」置顶+内置13套+导入预设合并渲染;索引派发避免名称转义问题
-  EQ_ORDER = ['手动十段'].concat(Object.keys(EQ_PRESETS), Object.keys(EQ_IMPORTED));
+function renderEqList() {                  // 内置13套+导入PowerAMP预设合并渲染;索引派发避免名称转义问题
+  EQ_ORDER = Object.keys(EQ_PRESETS).concat(Object.keys(EQ_IMPORTED));
   $('eqList').innerHTML = EQ_ORDER.map((k, i) => {
     return `<div class="eq-row${k === eqActiveName ? ' on' : ''}" onclick="applyEqIdx(${i})">`
       + `<span class="eq-name">${esc(eqDisplay(k))}</span><span class="eq-mark">㉿</span></div>`;
   }).join('');
-  const man = $('eqMan');
-  if (man) {
-    man.classList.toggle('on', eqActiveName === '手动十段');   // 仅手动十段选中时展开滑杆区
-    if (man.classList.contains('on') && !man.innerHTML) renderManualPanel();
-  }
 }
 function applyEqIdx(i) { if (EQ_ORDER[i]) applyEq(EQ_ORDER[i]); }
 function openEqModal() {
