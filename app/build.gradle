@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 94
-        versionName '3.80'   // ①修复误导性提示:音源歌词接口失效时只保留'接口已失效'一次性提醒,不再叠加'这首歌暂无歌词'(xsrcSkip标记区分失效跳过与真无词)
+        versionCode 95
+        versionName '3.81'   // ①空态文案:'尚未配置任何音源文件'→'// 支持洛雪(lx)协议音源js文件',删除副文案'支持洛雪(LX)协议音源.JS'及其样式(.src-empty-sub)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

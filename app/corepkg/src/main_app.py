@@ -2761,7 +2761,6 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
   .switch.on::after { transform:translateX(16px); background:#fff; }
   .src-empty { text-align:center; padding:26px 0 22px; display:none; }
   .src-empty-txt { font-size:10px; color:var(--muted); margin-bottom:14px; }
-  .src-empty-sub { font-size:10px; color:var(--muted); opacity:.7; margin-top:10px; }
   /* 校验进行/报告弹窗(v3.72):实时日志+完成汇总,随时可关闭返回管理列表 */
   .vrfybox { width:min(88vw,480px); }
   .vrfy-log { max-height:36vh; overflow-y:auto; font-family:var(--mono); font-size:11px; line-height:1.75; color:var(--muted); background:rgba(0,0,0,.25); border-radius:var(--r-md); padding:10px 12px; scrollbar-width:none; word-break:break-all; }
@@ -3123,9 +3122,8 @@ EMBEDDED_HTML = r'''<!DOCTYPE html>
     <div class="qr-scroll" id="srcScroll">
       <div id="srcListBox"></div>
       <div class="src-empty" id="srcEmpty">
-        <div class="src-empty-txt">尚未配置任何音源文件</div>
+        <div class="src-empty-txt">// 支持洛雪(lx)协议音源js文件</div>
         <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">从本地文件导入</button>
-        <div class="src-empty-sub">支持洛雪(LX)协议音源.JS</div>
       </div>
       <div class="src-addrow" id="srcAddRow">
         <button class="modal-btn" style="width:auto;margin:0 auto;padding:10px 22px;" onclick="srcPickImport()">从本地文件导入</button>
