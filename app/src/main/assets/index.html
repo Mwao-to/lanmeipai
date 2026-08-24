@@ -327,10 +327,12 @@
   /* ═══ 五键快捷条:双栏列表正下方 ═══
    * 外层容器观感对齐主列表(.panel):同圆角(--r-md)、同底色透明度(--glass-regular);
    * 上边距10px(v3.42曾改40px后回滚);
-   * 内部 5 键等权 1:1,透明药丸+红字(与播放器下载标签同配色) */
+   * 内部 5 键等权 1:1,透明药丸+红字(与播放器下载标签同配色)
+   * v3.68 平板适配:去掉旧max-width:680px限制——宽屏下快捷条与上方双栏列表(.dash)左右边缘完全对齐,
+   * 不再收缩居中;窄屏容器本就<680px观感不变 */
   .quick-bar {
     display:flex; gap:8px; align-items:center;
-    width:100%; max-width:680px; margin-top:10px; margin-left:auto; margin-right:auto;   /* 上距主列表10px(已回滚) */
+    width:100%; margin-top:10px;   /* 宽度=容器内容宽,与.dash两栏列表左右对齐(旧680px上限致平板上收缩) */
     padding:8px; box-sizing:border-box;
     background:var(--glass-regular);
     border:1px solid var(--glass-border); border-radius:var(--r-md);
@@ -641,7 +643,7 @@
     </div>
   </div>
 
-  <!-- 五键快捷条:ABCDE 功能占位,横向居中,整体宽度为播放器的一半 -->
+  <!-- 五键快捷条:ABCDE 功能占位,宽度与上方双栏列表左右边缘对齐(v3.68平板适配) -->
   <div class="quick-bar" id="quickBar">
     <button type="button" data-fn="A">登录</button>
     <button type="button" data-fn="B">歌单</button>
