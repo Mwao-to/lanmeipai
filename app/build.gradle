@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 89
-        versionName '3.75'   // ①行卡片56→71px+开关下移,与右上删除钮拉开≥15px视觉间距②删除确认弹窗:文案改'确认删除音源文件？数据将会完全移除'+文件名,左确认右取消互换,消息/按钮字号对齐D弹窗10px,按钮white-space:nowrap禁换行③去掉底部固定'导入音源文件'小钮,列表尾部迁移初始页同款居中'导入自定义第三方音源'大钮(src-addrow,有文件时显示)
+        versionCode 90
+        versionName '3.76'   // ①滑动开关上方外边距固定25px(脱离居中换算)②行卡片71→66px③点击删除直接执行删除+toast反馈,确认弹窗(cfmModal/askConfirm/closeCfm及CSS)整体移除④音源详细信息绝对定位置于标签左下角(left:10/bottom:6)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

@@ -352,20 +352,20 @@
   /* ═══ D键·自定义音源弹窗(v3.74):完全对齐歌单弹窗机制——弹窗本体不限高,内容装进.qr-scroll(≤56vh)滚动;全字号10px ═══ */
   #srcModal .modal-box { width:min(360px,90vw); }        /* 同#mvModal加宽手法,布局逻辑与歌单弹窗一致 */
   /* 列表自身不滚动(qr-scroll统一负责),条目用pl-item同款margin-bottom间隔 */
-  .src-item { position:relative; box-sizing:border-box; width:100%; height:71px; margin-bottom:7px; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:rgba(255,255,255,.04); border:1px solid var(--glass-border); cursor:default; text-align:left; }   /* v3.75:56→71px,适配开关下移后内部呼吸空间 */
+  .src-item { position:relative; box-sizing:border-box; width:100%; height:66px; margin-bottom:7px; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:rgba(255,255,255,.04); border:1px solid var(--glass-border); cursor:default; text-align:left; }   /* v3.76:71→66px */
   .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }   /* 仅变色不改尺寸 */
   .src-namebox { margin-right:96px; }                        /* 给右上角[校验][删除]让位 */
-  .src-metabox { margin-top:3px; }
+  .src-metabox { position:absolute; left:10px; bottom:6px; right:64px; }   /* v3.76:详细信息均布在标签左下角 */
   .src-mq { overflow:hidden; white-space:nowrap; }
   .src-mq > span { display:inline-block; will-change:transform; }
   .src-mq.run > span { animation:srcMq var(--mq-dur,8s) linear infinite alternate; }
   @keyframes srcMq { from{transform:translateX(0)} to{transform:translateX(var(--mq-shift,-40px))} }
   .src-name { font-size:10px; color:var(--text-bright); line-height:1.5; }
   .src-meta { font-size:10px; color:var(--muted); line-height:1.5; }
-  .src-topbtns { position:absolute; top:5px; right:6px; display:flex; gap:5px; }
+  .src-topbtns { position:absolute; top:4px; right:6px; display:flex; gap:5px; }
   .src-btn { flex-shrink:0; font-size:10px; padding:2px 8px; border-radius:7px; border:1px solid var(--glass-border); background:rgba(255,255,255,.06); color:var(--text-bright); cursor:pointer; font-family:var(--mono); line-height:1.5; transition:border-color .15s ease; }
   .src-btn.del { color:#ff7b72; }
-  .switch { position:absolute; right:9px; top:calc(50% + 8px); transform:translateY(-50%); width:38px; height:20px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }   /* v3.75:行高加大后开关下移,与右上删除钮拉开≥15px视觉间距 */
+  .switch { position:absolute; right:9px; top:25px; width:38px; height:20px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }   /* v3.76:上方外边距固定25px */
   .switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
   .switch.on { background:rgba(236,65,65,.55); }
   .switch.on::after { transform:translateX(16px); background:#fff; }
@@ -381,12 +381,8 @@
   .vrfy-log .dim { opacity:.62; }
   .vrfy-sum { margin-top:10px; font-size:12px; font-family:var(--mono); line-height:1.7; }
   /* 通用确认弹窗(v3.72):确认/取消双选 */
-  .cfmbox { width:min(82vw,360px); }
+  /* 确认弹窗已按需求移除(v3.76) */
   .src-addrow { display:none; text-align:center; padding:6px 0 2px; }
-  /* 确认弹窗(v3.75):字号对齐D弹窗10px,按钮文本禁止换行 */
-  .cfm-msg { font-size:10px; color:var(--muted); line-height:1.7; margin:12px 0 16px; word-break:break-all; white-space:pre-line; }
-  .cfm-btns { display:flex; gap:10px; }
-  .cfm-btns .modal-btn { flex:1; width:auto; margin:0; padding:10px 0; max-width:none; font-size:10px; white-space:nowrap; }
   .quick-bar button:active { transform:scale(.9); }   /* 弹性按压,与全站一致 */
 
   /* ═══ A键·扫码登录弹窗(布局同下载弹窗,内容专属) ═══ */
@@ -759,17 +755,7 @@
   </div>
 </div>
 
-<!-- ═══ 通用确认弹窗(v3.75):左确认右取消,字号对齐D弹窗,单行按钮 ═══ -->
-<div class="modal-mask" id="cfmModal">
-  <div class="modal-box cfmbox">
-    <div class="modal-title" id="cfmTitle">确认操作</div>
-    <div class="cfm-msg" id="cfmMsg"></div>
-    <div class="cfm-btns">
-      <button class="modal-btn" onclick="closeCfm(true)">确认</button>
-      <button class="modal-btn secondary" onclick="closeCfm(false)">取消</button>
-    </div>
-  </div>
-</div>
+<!-- ═══ 通用确认弹窗已于v3.76按需求移除:删除改为直接执行+toast反馈 ═══ -->
 
 <div class="modal-mask" id="eqModal">
   <div class="modal-box eqbox">
@@ -1194,29 +1180,13 @@ function toggleXsrc(fileName) {                 /* 独占切换:单槽天然保�
   toast('正在启用音源并更新全局策略…', 'info', 1500);
   loadXsrc(fileName, code, false).then(() => renderSrcList());
 }
-/* 通用确认弹窗(v3.72):确认/取消双选,替代行内两段式按钮 */
-let cfmCb = null;
-function askConfirm(title, msg, cb) {
-  $('cfmTitle').textContent = title;
-  $('cfmMsg').textContent = msg;
-  cfmCb = cb;
-  $('cfmModal').classList.add('show');
-}
-function closeCfm(yes) {
-  $('cfmModal').classList.remove('show');
-  const cb = cfmCb; cfmCb = null;
-  if (yes && cb) cb();
-}
-$('cfmModal').addEventListener('click', e => { if (e.target.id === 'cfmModal') closeCfm(false); });
-function deleteXsrc(fileName) {                 /* 确认弹窗删除(含私有副本) */
+function deleteXsrc(fileName) {                 /* v3.76:点击直接删除(不再弹确认窗),toast反馈 */
+  if (!bridgeCall('srcDelete', fileName)) { toast('删除失败', 'error'); return; }
   const activeHere = xsrcHandler && xsrcHandler.file === fileName;
-  askConfirm('删除音源', '确认删除音源文件？数据将会完全移除\n「' + fileName + '」' + (activeHere ? '\n该音源当前启用中，删除后将恢复内置三通道策略。' : ''), () => {
-    if (!bridgeCall('srcDelete', fileName)) { toast('删除失败', 'error'); return; }
-    if (activeHere) stopXsrc(false); else updateXsrcTip();
-    delete xsrcMeta[fileName];
-    toast('音源「' + fileName + '」已删除（含私有目录副本）', 'success', 2800);
-    renderSrcList();
-  });
+  if (activeHere) stopXsrc(false); else updateXsrcTip();
+  delete xsrcMeta[fileName];
+  toast('音源「' + fileName + '」已删除（含私有目录副本）', 'success', 2800);
+  renderSrcList();
 }
 function xsrcCallOn(ctx, action, song, quality) { /* 固定wy平台(本App曲库),超时保护 */
   if (!ctx || !ctx.handler) return Promise.reject(new Error('音源不可用'));
