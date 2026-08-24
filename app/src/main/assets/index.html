@@ -352,7 +352,7 @@
   /* ═══ D键·自定义音源弹窗(v3.74):完全对齐歌单弹窗机制——弹窗本体不限高,内容装进.qr-scroll(≤56vh)滚动;全字号10px ═══ */
   #srcModal .modal-box { width:min(360px,90vw); }        /* 同#mvModal加宽手法,布局逻辑与歌单弹窗一致 */
   /* 列表自身不滚动(qr-scroll统一负责),条目用pl-item同款margin-bottom间隔 */
-  .src-item { position:relative; box-sizing:border-box; width:100%; height:66px; margin-bottom:7px; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:rgba(255,255,255,.04); border:1px solid var(--glass-border); cursor:default; text-align:left; }   /* v3.76:71→66px */
+  .src-item { position:relative; box-sizing:border-box; width:100%; height:76px; margin-bottom:7px; padding:7px 58px 7px 10px; border-radius:var(--r-md); background:rgba(255,255,255,.04); border:1px solid var(--glass-border); cursor:default; text-align:left; }   /* v3.77:66→76px,容纳开关与删除钮间25px真实间距 */
   .src-item.active { border-color:rgba(236,65,65,.55); background:rgba(194,12,12,.08); }   /* 仅变色不改尺寸 */
   .src-namebox { margin-right:96px; }                        /* 给右上角[校验][删除]让位 */
   .src-metabox { position:absolute; left:10px; bottom:6px; right:64px; }   /* v3.76:详细信息均布在标签左下角 */
@@ -365,7 +365,7 @@
   .src-topbtns { position:absolute; top:4px; right:6px; display:flex; gap:5px; }
   .src-btn { flex-shrink:0; font-size:10px; padding:2px 8px; border-radius:7px; border:1px solid var(--glass-border); background:rgba(255,255,255,.06); color:var(--text-bright); cursor:pointer; font-family:var(--mono); line-height:1.5; transition:border-color .15s ease; }
   .src-btn.del { color:#ff7b72; }
-  .switch { position:absolute; right:9px; top:25px; width:38px; height:20px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }   /* v3.76:上方外边距固定25px */
+  .switch { position:absolute; right:9px; top:50px; width:38px; height:20px; border-radius:99px; background:rgba(255,255,255,.12); border:1px solid var(--glass-border); cursor:pointer; transition:background .18s ease; }   /* v3.77:删除钮下沿(~y25)+25px间距→top:50px */
   .switch::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#aaa; transition:transform .18s var(--spring), background .18s ease; }
   .switch.on { background:rgba(236,65,65,.55); }
   .switch.on::after { transform:translateX(16px); background:#fff; }

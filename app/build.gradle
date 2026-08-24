@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 90
-        versionName '3.76'   // ①滑动开关上方外边距固定25px(脱离居中换算)②行卡片71→66px③点击删除直接执行删除+toast反馈,确认弹窗(cfmModal/askConfirm/closeCfm及CSS)整体移除④音源详细信息绝对定位置于标签左下角(left:10/bottom:6)
+        versionCode 91
+        versionName '3.77'   // ①滑动开关与删除按钮真实间距25px:开关top 25→50px(删除钮下沿~y25+25),行卡片66→76px容纳
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
