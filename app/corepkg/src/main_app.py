@@ -1993,7 +1993,6 @@ def api_merge():
     tip = '已嵌入歌词与封面' if embedded else (
         ('未支持该容器嵌入，已保留原音频' + (f'（{embed_err}）' if embed_err else ''))
         if ext not in ('mp3', 'm4a', 'flac') else '无可用歌词/封面，仅保存音频')
-    Dbg.i(f'[merge] {fname} embedded={embedded} ext={ext} {tip}')
     return jsonify({'code': 200, 'data': {'filename': os.path.basename(final_path),
                                           'embedded': embedded, 'ext': ext, 'tip': tip}})
 
