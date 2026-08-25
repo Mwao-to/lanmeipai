@@ -397,7 +397,7 @@ public class MainActivity extends Activity {
                 }
                 return true;
             } catch (Throwable t) {
-                Dbg.w(this, "‼️ [merge] 歌词暂存失败", t);
+                Dbg.w(MainActivity.this, "‼️ [merge] 歌词暂存失败", t);
                 return false;
             }
         }
