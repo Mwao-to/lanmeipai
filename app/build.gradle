@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 104
-        versionName '3.90'   // ①校验弹窗回滚专业详版(v3.85风格):恢复'开始校验/使用启用中实例或临时加载/协议握手成功·平台N个·接口清单'开场,逐项✓含毫秒耗时,未声明项'－'标注,尾部平台清单dump,汇总'校验完成:N项可用,M项废弃/异常';保留v3.85统一判定口径judgeXsrcVal+HEAD真探测+标题长名缩略
+        versionCode 105
+        versionName '3.91'   // ①校验弹窗加载动效:打字机逐字打出'正在校验检查中，请稍候·..'+光标,始终钉在日志末行,结束/关窗即清②去掉汇总区操作指引文案(如需启用…可关闭本窗…)③汇总改关键三项结果:'校验完成：歌曲-可用 / 歌词-可用 / 图片-未声明'(未声明项如实标注)
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
