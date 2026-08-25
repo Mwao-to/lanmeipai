@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 107
-        versionName '3.93'   // 修复v3.92合并下载报错:api_merge尾部误用不存在的Dbg.i日志对象→NameError→Flask 500→前端提示下载失败;删除该行;本地冒烟验证三分支嵌入逻辑(mp3五帧全存/flac标题歌词封面/aac原样保留)均通过
+        versionCode 108
+        versionName '3.94'   // 修复合并下载无歌词:①歌词改用播放器已加载的数据——前端currentLrcText()从state.lyricTimes无损重建标准LRC(与显示完全一致),经新桥stageText写入暂存目录,api_merge用lrcfile参数直取嵌入,后端官方拉取降为兑底②封面同步改为前端当前s.img直传(picurl参数),不再依赖缓存对象③stage参数前置校验;测试[13]共45项+EQ回归23项全过
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口

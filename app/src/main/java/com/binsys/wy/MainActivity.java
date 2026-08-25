@@ -384,6 +384,24 @@ public class MainActivity extends Activity {
             return d != null ? d.getAbsolutePath() : "";
         }
 
+        /** v3.94合并下载:页面把当前已加载的歌词写入暂存目录,供/api/merge直取嵌入(保证与显示一致) */
+        @JavascriptInterface
+        public boolean stageText(String filename, String content) {
+            try {
+                if (filename == null || filename.contains("/") || filename.contains("\\") || filename.contains("..")) return false;
+                File dir = getExternalFilesDir("merged");
+                if (dir == null) return false;
+                if (!dir.exists() && !dir.mkdirs()) return false;
+                try (FileOutputStream fo = new FileOutputStream(new File(dir, filename))) {
+                    fo.write(content.getBytes(StandardCharsets.UTF_8));
+                }
+                return true;
+            } catch (Throwable t) {
+                Dbg.w(this, "‼️ [merge] 歌词暂存失败", t);
+                return false;
+            }
+        }
+
         /** v3.92合并下载:把暂存目录中已嵌好歌词封面的音频转存公共Download/网易云下载器/,完成后清理暂存 */
         @JavascriptInterface
         public void promote(String filename) {

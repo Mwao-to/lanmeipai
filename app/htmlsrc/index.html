@@ -2685,6 +2685,14 @@ function nativeDownload(filename, url) {
 }
 
 /* ═══ 合并下载(v3.92):先下完歌→官方歌词+封面嵌入元数据(mp3-ID3v2/m4a-ilst/flac-VORBIS,mutagen自动适配)→提示成功 ═══ */
+function currentLrcText() {                    /* v3.94:把播放器已加载的歌词数据重建为标准LRC(与显示完全一致) */
+  if (!state.lyricTimes || !state.lyricTimes.length) return '';
+  const pad = n => (n < 10 ? '0' : '') + n;
+  return state.lyricTimes.map(l => {
+    const m = Math.floor(l.t / 60), s = Math.floor(l.t % 60), cs = Math.floor((l.t - Math.floor(l.t)) * 100);
+    return '[' + pad(m) + ':' + pad(s) + '.' + pad(cs) + ']' + l.text;
+  }).join('\n');
+}
 async function downloadMerged() {
   const s = state.song;
   closeDlModal();
@@ -2699,6 +2707,13 @@ async function downloadMerged() {
       } catch (e) { /* 取链失败交由后端官方通道兑底 */ }
     }
     if (hasBridge('stageDir')) p += '&stage=' + encodeURIComponent(bridgeCall('stageDir'));
+    /* v3.94:歌词用当前已加载的数据单独暂存直传(不依赖后端二次拉取),封面同源直传URL */
+    const lrc = currentLrcText();
+    if (lrc && hasBridge('stageText')) {
+      const lf = '.mrg_' + Date.now() + '.lrc';
+      if (bridgeCall('stageText', lf, lrc)) p += '&lrcfile=' + encodeURIComponent(lf);
+    }
+    if (s.img) p += '&picurl=' + encodeURIComponent(s.img);
     const r = await api(p);
     if (r.code !== 200 || !r.data || !r.data.filename) {
       toast('合并失败：' + ((r.message || '未知错误').slice(0, 60)), 'error', 4500);

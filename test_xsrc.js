@@ -172,6 +172,12 @@ function getSongId(m) { return m.songmid || m.id }`;
   const mAct = fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/binsys/wy/MainActivity.java'), 'utf8');
   ok(/public String stageDir\(\)/.test(mAct) && /public void promote\(String filename\)/.test(mAct), 'Java暂存目录+转存公共Download桥');
 
+  console.log('[13] v3.94歌词直传:播放器已加载歌词重建LRC经暂存文件嵌入');
+  ok(/function currentLrcText\(\)/.test(html) && /state\.lyricTimes\.map/.test(html), '前端从lyricTimes重建标准LRC');
+  ok(/hasBridge\('stageText'\)/.test(html) && /lrcfile=' \+ encodeURIComponent\(lf\)/.test(html), '歌词暂存文件直传merge路由');
+  ok(/lrcfile = \(request\.args\.get\('lrcfile'\)/.test(pySrc) && /picurl/.test(pySrc) && /_fetch_lyric\(song, songmid\)/.test(pySrc), '后端优先暂存歌词+封面URL直传(官方兑底)');
+  ok(/public boolean stageText\(String filename, String content\)/.test(mAct), 'Java stageText桥就位');
+
   console.log(`\n═══ 结果: ${pass} 通过, ${fail} 失败 ═══`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('✗ 桩异常:', e); process.exit(1); });
