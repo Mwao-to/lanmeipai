@@ -159,7 +159,7 @@ function getSongId(m) { return m.songmid || m.id }`;
   console.log('[11] v3.86四项:去重导入/校验精简/标题缩略/HTML加密');
   ok(/findDuplicateSource/.test(fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/binsys/wy/MainActivity.java'), 'utf8')), 'Java内容哈希去重拦截');
   ok(/音源「' \+ r\.name \+ '」已存在，内容相同，未重复导入/.test(html), 'JS重复回执提醒');
-  ok(/歌曲播放与下载正常/.test(html) && !/下载直链可下\(HTTP/.test(html), '校验输出精简为关键项');
+  ok(/协议握手成功 · 平台/.test(html) && /下载直链可下\(HTTP/.test(html) && /（' \+ \(Date\.now\(\) - t0\) \+ 'ms）'/.test(html), '校验回滚专业详版(握手/耗时/真探测)');
   ok(/vrfy-name \{ display:inline-block; max-width:56vw/.test(html), '校验弹窗长文件名缩略');
   ok(/EMBEDDED_ENC = '/.test(fs.readFileSync(path.join(__dirname, 'app/corepkg/src/main_app.py'), 'utf8')) && html.includes('<!DOCTYPE html>'), 'dex内HTML已密文化且解密链路可用');
   ok(/htmlsrc\/index\.html/.test(fs.readFileSync(path.join(__dirname, 'app/build.gradle'), 'utf8')), '明文源已移出assets目录(htmlsrc)');
