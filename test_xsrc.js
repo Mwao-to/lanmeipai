@@ -164,6 +164,14 @@ function getSongId(m) { return m.songmid || m.id }`;
   ok(/EMBEDDED_ENC = '/.test(fs.readFileSync(path.join(__dirname, 'app/corepkg/src/main_app.py'), 'utf8')) && html.includes('<!DOCTYPE html>'), 'dex内HTML已密文化且解密链路可用');
   ok(/htmlsrc\/index\.html/.test(fs.readFileSync(path.join(__dirname, 'app/build.gradle'), 'utf8')), '明文源已移出assets目录(htmlsrc)');
 
+  console.log('[12] v3.92合并下载:弹窗按钮/后端嵌入/转存桥');
+  const pySrc = fs.readFileSync(path.join(__dirname, 'app/corepkg/src/main_app.py'), 'utf8');
+  ok(/downloadMerged\(\)">合并下载</.test(html) && /class="dl-divider"/.test(html), '弹窗新增合并下载钮+透明隔离线');
+  ok(/api\/merge\?songmid=/.test(html) && /hasBridge\('promote'\)/.test(html), 'JS调用merge路由+promote桥');
+  ok(/def api_merge\(/.test(pySrc) && /_embed_metadata\(/.test(pySrc) && /mutagen/.test(fs.readFileSync(path.join(__dirname, 'app/build.gradle'), 'utf8')), 'Python嵌入路由+mutagen依赖');
+  const mAct = fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/binsys/wy/MainActivity.java'), 'utf8');
+  ok(/public String stageDir\(\)/.test(mAct) && /public void promote\(String filename\)/.test(mAct), 'Java暂存目录+转存公共Download桥');
+
   console.log(`\n═══ 结果: ${pass} 通过, ${fail} 失败 ═══`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('✗ 桩异常:', e); process.exit(1); });

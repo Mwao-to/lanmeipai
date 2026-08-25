@@ -377,6 +377,63 @@ public class MainActivity extends Activity {
             saveTextToDownloads(filename, content);
         }
 
+        /** v3.92合并下载:Python嵌入完的音频暂存目录(外部私有,免权限且同进程可写) */
+        @JavascriptInterface
+        public String stageDir() {
+            File d = getExternalFilesDir("merged");
+            return d != null ? d.getAbsolutePath() : "";
+        }
+
+        /** v3.92合并下载:把暂存目录中已嵌好歌词封面的音频转存公共Download/网易云下载器/,完成后清理暂存 */
+        @JavascriptInterface
+        public void promote(String filename) {
+            final Context self = getApplicationContext();
+            apiPool.execute(() -> {
+                File src = null;
+                try {
+                    if (filename == null || filename.contains("/") || filename.contains("\\") || filename.contains(".."))
+                        throw new java.io.IOException("非法文件名");
+                    File dir = getExternalFilesDir("merged");
+                    src = dir != null ? new File(dir, filename) : null;
+                    if (src == null || !src.isFile()) throw new java.io.IOException("暂存文件不存在");
+                    dlEvent("start", filename, "");
+                    String finalPath;
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        ContentValues cv = new ContentValues();
+                        cv.put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, filename);
+                        cv.put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeOf(filename));
+                        cv.put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, DL_SUBDIR);
+                        Uri uri = self.getContentResolver().insert(
+                            android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv);
+                        try (InputStream in = new FileInputStream(src); OutputStream os = self.getContentResolver().openOutputStream(uri)) {
+                            byte[] buf = new byte[1 << 16];
+                            int n;
+                            while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
+                        }
+                        finalPath = queryDataPath(self, uri);
+                        if (finalPath == null) finalPath = "/" + DL_SUBDIR + "/" + filename;
+                    } else {
+                        if (!DL_LEGACY_DIR.exists() && !DL_LEGACY_DIR.mkdirs())
+                            throw new java.io.IOException("创建目录失败");
+                        File dst = uniqueLegacy(new File(DL_LEGACY_DIR, filename));
+                        try (InputStream in = new FileInputStream(src); FileOutputStream fo = new FileOutputStream(dst)) {
+                            byte[] buf = new byte[1 << 16];
+                            int n;
+                            while ((n = in.read(buf)) > 0) fo.write(buf, 0, n);
+                        }
+                        finalPath = dst.getAbsolutePath();
+                    }
+                    // 转存完成即清暂存,防私有目录膨胀
+                    if (!src.delete()) Dbg.w(self, "[merge] 暂存清理失败: " + src);
+                    Dbg.w(self, "[merge] 合并文件已转存: " + finalPath);
+                    dlEvent("done", filename, finalPath);
+                } catch (Throwable t) {
+                    Dbg.w(self, "‼️ [merge] 转存失败: " + filename, t);
+                    dlEvent("error", filename, t.getMessage() == null ? t.toString() : t.getMessage());
+                }
+            });
+        }
+
         /** 分享兑底:把文本写入系统剪贴板(即交给输入法的剪贴板,主流中文输入法可从
          *  键盘上方建议选取)。不弹键盘、不抢焦点,由用户自行粘贴发送。 */
         @JavascriptInterface

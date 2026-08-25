@@ -11,8 +11,8 @@ android {
         applicationId 'com.binsys.wy'
         minSdk 24          // Android 7.0+
         targetSdk 34
-        versionCode 105
-        versionName '3.91'   // ①校验弹窗加载动效:打字机逐字打出'正在校验检查中，请稍候·..'+光标,始终钉在日志末行,结束/关窗即清②去掉汇总区操作指引文案(如需启用…可关闭本窗…)③汇总改关键三项结果:'校验完成：歌曲-可用 / 歌词-可用 / 图片-未声明'(未声明项如实标注)
+        versionCode 106
+        versionName '3.92'   // 合并下载:①下载弹窗新增'合并下载'钮(位于下载歌曲上方,中间透明隔离线.dl-divider)②后端新增/api/merge:流式拉取当前歌曲→官方接口歌词(/api/lyric同源_fetch_lyric)+官方图床封面(魔数校验)→mutagen按容器嵌入(mp3-ID3v2.3 USLT/APIC;m4a-ilst ©lyr/covr;flac-VORBIS+PICTURE;aac/wav等原样保留)→落盘外部私有merged暂存目录③Java新增stageDir()/promote()桥:转存公共Download/网易云下载器后清理暂存④音源启用时直链与下载歌曲同源(url参数覆盖);api_download的_sniff提取为模块级_sniff_audio共用⑤pip新增mutagen;测试[12]共41项+EQ回归23项全过
         ndk { abiFilters 'arm64-v8a' }   // 仅编译 arm64
         python {
             // 内嵌 Python 运行时依赖:Flask 本地服务 + requests 网易云接口
@@ -21,6 +21,7 @@ android {
                 install 'flask'
                 install 'requests'
                 install 'qrcode'   // 纯Python:扫码登录二维码SVG本地渲染(A键兜底)
+                install 'mutagen'  // v3.92合并下载:音频元数据嵌入(ID3v2/MP4/FLAC全容器)
             }
         }
     }
