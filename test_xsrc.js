@@ -166,7 +166,8 @@ function getSongId(m) { return m.songmid || m.id }`;
 
   console.log('[12] v3.92合并下载:弹窗按钮/后端嵌入/转存桥');
   const pySrc = fs.readFileSync(path.join(__dirname, 'app/corepkg/src/main_app.py'), 'utf8');
-  ok(/downloadMerged\(\)">合并下载</.test(html) && /class="dl-divider"/.test(html), '弹窗新增合并下载钮+透明隔离线');
+  ok(/downloadMerged\(\)">ldM合并下载</.test(html) && !/dl-divider/.test(html) && /<button class="modal-btn secondary" onclick="downloadSong\(\)">下载歌曲<\/button>/.test(html), 'ldM合并下载钮+去隔离线+下载歌曲与歌词同外观');
+  ok(/ldM合并下载 · 步骤1\/3/.test(html) && /步骤2\/3/.test(html) && /步骤3\/3/.test(html), '合并下载分步进度提示');
   ok(/api\/merge\?songmid=/.test(html) && /hasBridge\('promote'\)/.test(html), 'JS调用merge路由+promote桥');
   ok(/def api_merge\(/.test(pySrc) && /_embed_metadata\(/.test(pySrc) && /mutagen/.test(fs.readFileSync(path.join(__dirname, 'app/build.gradle'), 'utf8')), 'Python嵌入路由+mutagen依赖');
   const mAct = fs.readFileSync(path.join(__dirname, 'app/src/main/java/com/binsys/wy/MainActivity.java'), 'utf8');
